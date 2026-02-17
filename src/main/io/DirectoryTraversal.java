@@ -25,7 +25,7 @@ public class DirectoryTraversal {
 
         for (File file : files) {
             if (file.isDirectory()) {
-                getFilesByExtension(file, extension);
+                matchedFiles.addAll(getFilesByExtension(file, extension));
             } else if (file.isFile() && file.getName().endsWith(extension)) {
                 matchedFiles.add(file);
             }
@@ -58,7 +58,7 @@ public class DirectoryTraversal {
                 }
             }
         } catch (IOException e) {
-            System.out.println("Error reading file: " + file.getAbsolutePath());
+            e.printStackTrace();
         }
         return false;
     }
@@ -76,9 +76,7 @@ public class DirectoryTraversal {
 
             if (file.isDirectory()) {
                 searchKeywordInDirectory(file, keyword);
-            }
-
-            else if (file.isFile()) {
+            } else if (file.isFile()) {
                 if (containsKeyword(file, keyword)) {
                     System.out.println("Keyword found in: " + file.getAbsolutePath());
                 }

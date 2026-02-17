@@ -33,12 +33,8 @@ public class CopyFile {
         try (FileInputStream in = new FileInputStream(source);
              FileOutputStream out = new FileOutputStream(destination)) {
 
-            int byteRead;
-            while ((byteRead = in.read()) != -1) {
-                out.write(byteRead);
-            }
+            copyStream(in, out, 1);
         }
-
         return System.nanoTime() - startTime;
     }
 
@@ -106,9 +102,8 @@ public class CopyFile {
             for (int size : bufferSizes) {
                 System.out.println("Custom buffer (" + size + " bytes): " + copyWithCustomBuffer(source, "/home/sudheshna/IdeaProjects/JavaAssignments/src/main/ioOutput/copy_" + size + ".txt", size) + " ns");
             }
-
         } catch (IOException e) {
-            System.out.println(e.getMessage());
+            e.printStackTrace();
         }
     }
 }

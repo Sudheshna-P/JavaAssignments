@@ -5,8 +5,10 @@ import java.io.*;
  * class can be serialized and deserialized</p>
  */
 class Person implements Serializable {
+
     @Serial
     private static final long serialVersionUID = 1L;
+
     private final String name;
     private final int age;
     private final String address;
@@ -30,7 +32,7 @@ class Person implements Serializable {
      * @return string representation of the Person class
       */
     public String toString() {
-        return "Person name = " + name + ", age = " + age + ", address = " + address;
+        return "Person name = " + name + ", age = " + age + ", address= " + address;
     }
 }
 
@@ -47,7 +49,7 @@ class FileSerialization {
             out.writeObject(obj);
             System.out.println("Object has been serialized to " + filename);
         } catch (IOException e) {
-            System.out.println("Serialization error: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -64,7 +66,7 @@ class FileSerialization {
             System.out.println("Object has been deserialized from " + filename);
             return obj;
         } catch (IOException | ClassNotFoundException e) {
-            System.out.println(e.getMessage());
+            e.printStackTrace();
             return null;
         }
     }

@@ -16,6 +16,7 @@ public class PropertiesFile {
 
         while ((line = reader.readLine()) != null) {
             line = line.trim();
+
             if (line.isEmpty()) continue;
 
             int index = line.indexOf('=');
@@ -27,8 +28,8 @@ public class PropertiesFile {
         }
         reader.close();
         return map;
-    }
 
+    }
 
     /**
      * Prints all properties
@@ -80,7 +81,7 @@ public class PropertiesFile {
         updateProperty(path, "msg", "hello");
         updateProperty(path, "age", "21");
         updateProperty(path, "name", "Sudheshna");
-        updateProperty(path, "newKey", "newValue"); // adding a completely new key
+        updateProperty(path, "newKey", "newValue");
 
     }
 }

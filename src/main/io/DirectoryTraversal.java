@@ -1,7 +1,4 @@
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,7 +44,6 @@ public class DirectoryTraversal {
      * Checks whether the file contains the given keyword.
      * @param file - the file to be checked if the keyword is present
      * @param keyword - the keyword that is searched
-     * @return true if the file contains the keyword else it returns false
      */
     public static boolean containsKeyword(File file, String keyword) {
         try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
@@ -66,16 +62,18 @@ public class DirectoryTraversal {
     /**
      * Recursively searches all files in the directory
      * for the given word. Searches the keyword in the entire directory regardless of the extension
+     *
      */
     public static void searchKeywordInDirectory(File directory, String keyword) {
 
         File[] files = directory.listFiles();
-        if (files == null) return;
+        if( files == null) return;
 
         for (File file : files) {
 
             if (file.isDirectory()) {
                 searchKeywordInDirectory(file, keyword);
+
             } else if (file.isFile()) {
                 if (containsKeyword(file, keyword)) {
                     System.out.println("Keyword found in: " + file.getAbsolutePath());
@@ -83,6 +81,36 @@ public class DirectoryTraversal {
             }
         }
     }
+    public static boolean containsKeywordInBinary(File file, String keyword) {
+
+        byte[] keywordBytes = keyword.getBytes();
+
+        try (FileInputStream fis = new FileInputStream(file)) {
+
+            byte[] fileBytes = fis.readAllBytes();
+
+            for (int i = 0; i <= fileBytes.length - keywordBytes.length; i++) {
+
+                boolean match = true;
+
+                for (int j = 0; j < keywordBytes.length; j++) {
+                    if (fileBytes[i + j] != keywordBytes[j]) {
+                        match = false;
+                        break;
+                    }
+                }
+                if(match){
+                    return true;
+                }
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return false;
+    }
+
 
     /**
      * The main function where the program starts
@@ -103,11 +131,13 @@ public class DirectoryTraversal {
 
         System.out.println("Files with extension " + extension + ":\n");
         List<File> allFiles = getFilesByExtension(rootDirectory, extension);
-        for (File file : allFiles) {
+
+        for(File file : allFiles){
             printFileDetails(file);
         }
 
         System.out.println("Files containing the keyword '" + keyword + "':\n");
         searchKeywordInDirectory(rootDirectory, keyword);
+        searchKeywordInDirectory(rootDirectory,keyword);
     }
 }

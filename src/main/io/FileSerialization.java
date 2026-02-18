@@ -1,5 +1,5 @@
 import java.io.*;
-
+import java.util.Objects;
 /**
  *<p>Class Person implements Serializable interface so that the object of this
  * class can be serialized and deserialized</p>
@@ -27,6 +27,21 @@ class Person implements Serializable {
         this.address = address;
     }
 
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+
+        if (obj == null || getClass() != obj.getClass()) return false;
+
+        Person other = (Person) obj;
+
+        return age == other.age &&
+                Objects.equals(name, other.name) &&
+                Objects.equals(address, other.address);
+    }
+
+
     /**
      *Returns string representation of the {@code Person}
      * @return string representation of the Person class
@@ -43,15 +58,14 @@ class FileSerialization {
      * @param obj the object to serialize; must implement {@link Serializable}
      * @param filename the name of the file to save the serialized object
      */
-    public static void serialize(Object obj, String filename) {
+    public static void serialize(Object obj, String filename) throws IOException {
         try (FileOutputStream fileOut = new FileOutputStream(filename);
              ObjectOutputStream out = new ObjectOutputStream(fileOut)) {
             out.writeObject(obj);
             System.out.println("Object has been serialized to " + filename);
-        } catch (IOException e) {
-            e.printStackTrace();
         }
     }
+
 
     /**
      * Deserializes an object from the specified file.
@@ -59,15 +73,12 @@ class FileSerialization {
      * @param filename the name of the file containing the serialized object
      * @return the deserialized object, or {@code null} if an error occurs
      */
-    public static Object deserialize(String filename) {
+    public static Object deserialize(String filename) throws IOException, ClassNotFoundException{
         try (FileInputStream fileIn = new FileInputStream(filename);
              ObjectInputStream in = new ObjectInputStream(fileIn)) {
             Object obj = in.readObject();
             System.out.println("Object has been deserialized from " + filename);
             return obj;
-        } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
-            return null;
         }
     }
 
@@ -77,16 +88,19 @@ class FileSerialization {
      */
     public static void main(String[] args) {
         String filename = "person.ser";
-
         Person person = new Person("Sudheshna", 21, "Chennai");
 
-        serialize(person, filename);
+        try {
+            serialize(person, filename);
 
-        Person deserializedPerson = (Person) deserialize(filename);
+            Person deserializedPerson = (Person) deserialize(filename);
 
-        if (deserializedPerson != null) {
             System.out.println("Deserialized Person Details:");
             System.out.println(deserializedPerson);
+            System.out.println(person.equals(deserializedPerson));
+
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
         }
     }
 }

@@ -25,12 +25,11 @@ public class CopyFile {
      * @param source - the source file
      * @param destination - the destination file where the content from source is copied
      * @return the time taken to copy the data from source to the destination in ns
-     * @throws IOException when any input output error occurs
+     * @throws IOException when  any input output error occurs
      */
     public static long copyWithoutBuffer(String source, String destination) throws IOException {
         long startTime = System.nanoTime();
-
-        try (FileInputStream in = new FileInputStream(source);
+        try (FileInputStream in =new FileInputStream(source);
              FileOutputStream out = new FileOutputStream(destination)) {
 
             copyStream(in, out, 1);
@@ -87,9 +86,8 @@ public class CopyFile {
 
         if (sourceFile.exists()) {
             System.out.println("Size of file: " + sourceFile.length() + " bytes");
-        } else {
-            System.out.println("File does not exist!");
-            return;
+        } else{
+            System.out.println("File doesn't exist");
         }
 
         try {

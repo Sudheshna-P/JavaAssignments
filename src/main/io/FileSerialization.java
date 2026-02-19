@@ -27,7 +27,11 @@ class Person implements Serializable {
         this.address = address;
     }
 
-
+    /**
+     * it overrides the equals() method to check whether the value is same
+     * @param obj the object to be checked
+     * @return true if the value is same even when address is different and false if the value is different
+     */
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
@@ -58,7 +62,7 @@ class FileSerialization {
      * @param obj the object to serialize; must implement {@link Serializable}
      * @param filename the name of the file to save the serialized object
      */
-    public static void serialize(Object obj, String filename) throws IOException {
+    public static void serialize(Serializable obj, String filename) throws IOException {
         try (FileOutputStream fileOut = new FileOutputStream(filename);
              ObjectOutputStream out = new ObjectOutputStream(fileOut)) {
             out.writeObject(obj);

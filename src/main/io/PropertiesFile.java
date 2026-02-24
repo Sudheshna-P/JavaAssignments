@@ -28,7 +28,14 @@ public class PropertiesFile {
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
                 if (line.isEmpty() || line.startsWith("#") || line.startsWith("!")) continue;
-                int index = line.indexOf('=');
+                int index = -1;
+                for (int i = 0; i < line.length(); i++) {
+                    char ch = line.charAt(i);
+                    if (ch == '=' || ch == ':'){
+                        index = i;
+                        break;
+                    }
+                }
                 if (index > 0) {
                     String key = line.substring(0, index).trim();
                     String value = line.substring(index + 1).trim();
@@ -59,11 +66,17 @@ public class PropertiesFile {
      * @throws IOException if an I/O error occurs while writing to the file
      */
     public void writeProperties() throws IOException {
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(path))) {
+        File originalFile = new File(path);
+        File tempFile = new File(path + ".tmp");
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
             for (Map.Entry<String, String> entry : properties.entrySet()) {
                 writer.write(entry.getKey() + "=" + entry.getValue());
                 writer.newLine();
             }
+        }
+        if (!tempFile.renameTo(originalFile)) {
+            throw new IOException("Could not replace original file");
         }
     }
 

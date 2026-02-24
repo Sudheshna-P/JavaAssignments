@@ -65,7 +65,7 @@ public class PropertiesFile {
      * Writes the properties map back to the file
      * @throws IOException if an I/O error occurs while writing to the file
      */
-    public void writeProperties() throws IOException {
+    public synchronized void writeProperties() throws IOException {
         File originalFile = new File(path);
         File tempFile = new File(path + ".tmp");
 

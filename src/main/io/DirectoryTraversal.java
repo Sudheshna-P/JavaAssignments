@@ -21,36 +21,8 @@ public class DirectoryTraversal {
     public static List<File> getFilesByExtension(File directory, String extension) {
         List<File> matchedFiles = new ArrayList<>();
         Set<Path> visited = new HashSet<>();
-        collectFiles(directory, extension, matchedFiles, visited);
+        searchDirectory(directory, visited, matchedFiles, extension, null); // keyword = null
         return matchedFiles;
-    }
-
-    private static void collectFiles(File directory, String extension, List<File> matchedFiles, Set<Path> visited) {
-        try {
-            Path realPath = directory.toPath().toRealPath(); // resolves symlinks
-            if (!visited.add(realPath)) return; // already visited, avoid loops
-        } catch (IOException e) {
-            System.err.println("Cannot resolve path: " + directory);
-            return;
-        }
-
-        File[] files = directory.listFiles();
-        if (files == null) return;
-
-        for (File file : files) {
-            try {
-                Path filePath = file.toPath();
-                if (Files.isSymbolicLink(filePath)) continue; // skip symbolic links
-            } catch (Exception e) {
-                continue; // skip problematic files
-            }
-
-            if (file.isDirectory()) {
-                collectFiles(file, extension, matchedFiles, visited);
-            } else if (file.isFile() && file.getName().endsWith(extension)) {
-                matchedFiles.add(file);
-            }
-        }
     }
 
     /**
@@ -82,20 +54,36 @@ public class DirectoryTraversal {
     }
 
     /**
-     * Recursively searches all files in the directory for the given word.
-     * Safely handles symbolic links.
+     * Recursively searches the given directory and its subdirectories
+     * for files containing the specified keyword.
+     *
+     * @param directory the root directory to start the search
+     * @param keyword   the keyword to search for
      */
     public static void searchKeywordInDirectory(File directory, String keyword) {
         Set<Path> visited = new HashSet<>();
-        searchDirectory(directory, keyword, visited);
+        searchDirectory(directory, visited, null, null, keyword); // extensionMatches = null
     }
 
-    private static void searchDirectory(File directory, String keyword, Set<Path> visited) {
+    /**
+     * Recursively traverses a directory and performs either or both of the following:
+     * 1.Add files with a specific extension to the provided list
+     * 2.Print the path of files containing a specific keyword.
+     * Safely handles symbolic links and prevents infinite recursion.
+     *
+     * @param directory - the current directory to traverse
+     * @param visited - a set of canonical paths of already visited directories
+     * @param extensionMatches - the list to collect files by extension (nullable)
+     * @param extension - the extension to filter files (nullable)
+     * @param keyword - the keyword to search in files - null if keyword is not checked
+     */
+    private static void searchDirectory(File directory, Set<Path> visited, List<File> extensionMatches,
+                                        String extension, String keyword) {
         try {
             Path realPath = directory.toPath().toRealPath();
             if (!visited.add(realPath)) return; // already visited
         } catch (IOException e) {
-            return; // skip directories that can't be resolved
+            return;
         }
 
         File[] files = directory.listFiles();
@@ -110,18 +98,27 @@ public class DirectoryTraversal {
             }
 
             if (file.isDirectory()) {
-                searchDirectory(file, keyword, visited);
+                searchDirectory(file, visited, extensionMatches, extension, keyword);
             } else if (file.isFile()) {
-                if (containsKeyword(file, keyword) || containsKeywordInBinary(file, keyword)) {
-                    System.out.println("Keyword found in: " + file.getAbsolutePath());
+                if (extensionMatches != null && extension != null && file.getName().endsWith(extension)) {
+                    extensionMatches.add(file);
+                }
+
+                // Search for keyword
+                if (keyword != null) {
+                    if (containsKeyword(file, keyword) || containsKeywordInBinary(file, keyword)) {
+                        System.out.println("Keyword found in: " + file.getAbsolutePath());
+                    }
                 }
             }
         }
     }
 
     /**
-     * Checks whether the binary file contains the keyword.
-     * Safely handles broken symlinks.
+     * Checks whether a binary file contains the specified keyword.
+     * @param file - the binary file to be checked
+     * @param keyword - the keyword to search for
+     * @return rue if the keyword is found in the file, false otherwise
      */
     public static boolean containsKeywordInBinary(File file, String keyword) {
         byte[] keywordBytes = keyword.getBytes();
@@ -150,6 +147,25 @@ public class DirectoryTraversal {
         return false;
     }
 
+    public static void testBinarySearch() {
+        // File path
+        File binaryFile = new File("src/main/io/example.bin");
+        String keyword = "sud";
+
+        try {
+
+            try (FileOutputStream fos = new FileOutputStream(binaryFile)) {
+                String content = "This is a binary test file containing the word binary.";
+                fos.write(content.getBytes());
+            }
+
+            boolean found = containsKeywordInBinary(binaryFile, keyword);
+            System.out.println("\nKeyword found: " + found);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
     /**
      * The main function where the program starts
      * @param args - comment line argument
@@ -158,7 +174,7 @@ public class DirectoryTraversal {
 
         String directoryPath = "src/main/io";
         String extension = ".txt";
-        String keyword = "standard";
+        String keyword = "hello";
 
         File rootDirectory = new File(directoryPath);
 
@@ -176,5 +192,7 @@ public class DirectoryTraversal {
 
         System.out.println("Files containing the keyword '" + keyword + "':\n");
         searchKeywordInDirectory(rootDirectory, keyword);
+
+        testBinarySearch();
     }
 }

@@ -1,0 +1,109 @@
+This is a binary test file containing the word binary.
+
+import java.io.*;
+import java.util.*;
+
+public class PropertiesFile {
+
+    private final String filePath;
+    private final Map<String, String> properties;
+
+    /**
+     * Constructor: loads properties from file into memory
+     */
+    public PropertiesFile(String filePath) throws IOException {
+        this.filePath = filePath;
+        this.properties = new LinkedHashMap<>(); // preserves order
+        load();
+    }
+
+    /**
+     * Load the properties from file into memory
+     */
+    private void load() throws IOException {
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                int index = line.indexOf('=');
+                if (index > 0) {
+                    String key = line.substring(0, index).trim();
+                    String value = line.substring(index + 1).trim();
+                    properties.put(key, value);
+                }
+            }
+        }
+    }
+
+    /**
+     * Get a value by key
+     */
+    public String get(String key) {
+        return properties.get(key);
+    }
+
+    /**
+     * Update or add a property
+     */
+    public void set(String key, String value) {
+        if (properties.containsKey(key)) {
+            System.out.println("Updated key: " + key + ", new value: " + value);
+        } else {
+            System.out.println("Added new key: " + key + ", value: " + value);
+        }
+        properties.put(key, value);
+    }
+
+    /**
+     * Save the properties back to file
+     */
+    public void save() throws IOException {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))) {
+            for (Map.Entry<String, String> entry : properties.entrySet()) {
+                writer.write(entry.getKey() + "=" + entry.getValue());
+                writer.newLine();
+            }
+        }
+    }
+
+    /**
+     * Print all properties
+     */
+    public void print() {
+        for (Map.Entry<String, String> entry : properties.entrySet()) {
+            System.out.println(entry.getKey() + " = " + entry.getValue());
+        }
+    }
+
+    // Example usage
+    public static void main(String[] args) throws IOException {
+        String path1 = "/home/sudheshna/IdeaProjects/JavaAssignments/src/main/io/config.properties";
+        String path2 = "/home/sudheshna/IdeaProjects/JavaAssignments/src/main/io/other.properties";
+
+        // Each file has its own instance
+        PropertiesFile config1 = new PropertiesFile(path1);
+        PropertiesFile config2 = new PropertiesFile(path2);
+
+        System.out.println("File 1 properties:");
+        config1.print();
+
+        System.out.println("\nFile 2 properties:");
+        config2.print();
+
+        // Update some values
+        config1.set("address", "Chennai");
+        config1.set("age", "21");
+
+        config2.set("city", "Mumbai");
+        config2.set("name", "Alex");
+
+        // Save changes
+        config1.save();
+        config2.save();
+
+        System.out.println("\nAfter updates:");
+        config1.print();
+        config2.print();
+    }
+}

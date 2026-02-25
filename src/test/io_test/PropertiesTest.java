@@ -14,53 +14,108 @@ class PropertiesFileTest {
     void setUp() throws IOException {
         Files.writeString(Path.of(TEST_FILE),
                 """
-                        name=Sudheshna
-                        age=21
-                        city:Chennai
-                        # this is a comment
-                        """);
+                name=Sudheshna
+                age=21
+                city:Chennai
+                country = India
+                escapedKey\\=test=escapedValue
+                # this is a comment
+                ! another comment
+                                
+                """);
     }
 
     @AfterEach
     void tearDown() throws IOException {
         Files.deleteIfExists(Path.of(TEST_FILE));
-//        Files.deleteIfExists(Path.of(TEST_FILE + ".tmp"));
+        Files.deleteIfExists(Path.of(TEST_FILE + ".tmp"));
     }
 
+    // Test reading properties correctly
     @Test
     void testReadProperties() throws IOException {
         PropertiesFile config = new PropertiesFile(TEST_FILE);
         Map<String, String> props = config.getProperties();
 
-        assertEquals("John", props.get("name"));
-        assertEquals("30", props.get("age"));
-        assertEquals("Paris", props.get("city"));
+        assertEquals("Sudheshna", props.get("name"));
+        assertEquals("21", props.get("age"));
+        assertEquals("Chennai", props.get("city"));
+        assertEquals("India", props.get("country"));
+        assertEquals("escapedValue", props.get("escapedKey=test"));
     }
 
+    //  Test updating an existing key
     @Test
     void testUpdateExistingProperty() throws IOException {
         PropertiesFile config = new PropertiesFile(TEST_FILE);
-        config.updateProperty("age", "31");
+        config.updateProperty("age", "22");
 
-        assertEquals("31", config.getProperties().get("age"));
+        assertEquals("22", config.getProperties().get("age"));
     }
 
+    //  Test adding a new key
     @Test
     void testAddNewProperty() throws IOException {
         PropertiesFile config = new PropertiesFile(TEST_FILE);
-        config.updateProperty("country", "France");
+        config.updateProperty("state", "Tamil Nadu");
 
-        assertEquals("France", config.getProperties().get("country"));
+        assertEquals("Tamil Nadu", config.getProperties().get("state"));
     }
 
+    // Test writing updates to disk
     @Test
     void testWriteProperties() throws IOException {
         PropertiesFile config = new PropertiesFile(TEST_FILE);
-        config.updateProperty("age", "35");
+        config.updateProperty("age", "30");
         config.writeProperties();
 
-        // Reload from disk to verify persistence
+        // Reload from disk
         PropertiesFile reloaded = new PropertiesFile(TEST_FILE);
-        assertEquals("35", reloaded.getProperties().get("age"));
+        assertEquals("30", reloaded.getProperties().get("age"));
+    }
+
+    //  Test file not existing
+    @Test
+    void testFileNotExists() throws IOException {
+        String nonExistentFile = "missing.properties";
+        Files.deleteIfExists(Path.of(nonExistentFile));
+
+        PropertiesFile config = new PropertiesFile(nonExistentFile);
+        assertTrue(config.getProperties().isEmpty());
+    }
+
+    //  Test comments and empty lines are ignored
+    @Test
+    void testCommentsIgnored() throws IOException {
+        PropertiesFile config = new PropertiesFile(TEST_FILE);
+        Map<String, String> props = config.getProperties();
+
+        assertFalse(props.containsKey("# this is a comment"));
+        assertFalse(props.containsKey("! another comment"));
+    }
+
+    // Test defensive copy (modifying returned map should not affect original)
+    @Test
+    void testDefensiveCopy() throws IOException {
+        PropertiesFile config = new PropertiesFile(TEST_FILE);
+        Map<String, String> props = config.getProperties();
+
+        props.put("hacked", "value");
+
+        assertFalse(config.getProperties().containsKey("hacked"));
+    }
+
+    //  Test multiple writes overwrite correctly
+    @Test
+    void testMultipleWrites() throws IOException {
+        PropertiesFile config = new PropertiesFile(TEST_FILE);
+        config.updateProperty("age", "25");
+        config.writeProperties();
+
+        config.updateProperty("age", "26");
+        config.writeProperties();
+
+        PropertiesFile reloaded = new PropertiesFile(TEST_FILE);
+        assertEquals("26", reloaded.getProperties().get("age"));
     }
 }

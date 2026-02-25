@@ -20,9 +20,16 @@ public class PropertiesFile {
      * Reads the properties file and loads all key-value pairs
      * into the map - key value pairs
      * @throws IOException if an I/O error occurs while reading the file
+     * returns empty map if the file is missing
      */
     private Map<String, String> readProperties() throws IOException {
         Map<String, String> map = new HashMap<>();
+        File file = new File(path);
+
+        if (!file.exists()) {
+            return map;
+        }
+
         try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -36,7 +43,7 @@ public class PropertiesFile {
                         escaped = !escaped;
                         continue;
                     }
-                    if (!escaped && (ch == '=' || ch == ':')) {
+                    if (!escaped && (ch == '=' || ch == ':')|| Character.isWhitespace(ch)) {
                         index = i;
                         break;
                     }
@@ -123,7 +130,7 @@ public class PropertiesFile {
         config1.updateProperty("age","21");
 
         config2.updateProperty("city","Mystic falls");
-        config2.updateProperty("name","Damon");
+        config2.updateProperty("name","Elena");
 
         config1.writeProperties();
         config2.writeProperties();

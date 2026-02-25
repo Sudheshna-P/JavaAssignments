@@ -29,20 +29,32 @@ public class PropertiesFile {
                 line = line.trim();
                 if (line.isEmpty() || line.startsWith("#") || line.startsWith("!")) continue;
                 int index = -1;
+                boolean escaped = false;
                 for (int i = 0; i < line.length(); i++) {
                     char ch = line.charAt(i);
-                    if (ch == '=' || ch == ':'){
+                    if (ch == '\\') {
+                        escaped = !escaped;
+                        continue;
+                    }
+                    if (!escaped && (ch == '=' || ch == ':')) {
                         index = i;
                         break;
                     }
+                    escaped = false;
                 }
+
                 if (index > 0) {
                     String key = line.substring(0, index).trim();
+                    key = key.replace("\\=", "=").replace("\\:", ":");
                     String value = line.substring(index + 1).trim();
                     map.put(key, value);
                 }
             }
         }return map;
+    }
+
+    public Map<String, String> getProperties() {
+        return new HashMap<>(properties);
     }
 
     /**
@@ -84,7 +96,7 @@ public class PropertiesFile {
      * Prints all properties
      */
     public void printProperties() {
-        for (Map.Entry<String, String> entry : properties.entrySet()) {
+        for (Map.Entry<String, String> entry : properties.entrySet()){
             System.out.println(entry.getKey() + " = " + entry.getValue());
         }
     }
@@ -107,11 +119,11 @@ public class PropertiesFile {
         System.out.println("\nProperties from file2:");
         config2.printProperties();
 
-        config1.updateProperty("address","Chennai");
+        config1.updateProperty("address","Greendale");
         config1.updateProperty("age","21");
 
         config2.updateProperty("city","Mystic falls");
-        config2.updateProperty("name","Elena");
+        config2.updateProperty("name","Damon");
 
         config1.writeProperties();
         config2.writeProperties();

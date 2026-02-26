@@ -18,10 +18,10 @@ class PropertiesFileTest {
                 age=21
                 city:Chennai
                 country = India
+                
                 escapedKey\\=test=escapedValue
                 # this is a comment
                 ! another comment
-                                
                 """);
     }
 
@@ -31,7 +31,10 @@ class PropertiesFileTest {
         Files.deleteIfExists(Path.of(TEST_FILE + ".tmp"));
     }
 
-    // Test reading properties correctly
+    /**
+     * Test reading properties correctly
+     * @throws IOException if any i/o error occurs
+     */
     @Test
     void testReadProperties() throws IOException {
         PropertiesFile config = new PropertiesFile(TEST_FILE);
@@ -44,7 +47,10 @@ class PropertiesFileTest {
         assertEquals("escapedValue", props.get("escapedKey=test"));
     }
 
-    //  Test updating an existing key
+    /**
+     * Test updating an existing key
+     * @throws IOException if any i/o error occurs
+     */
     @Test
     void testUpdateExistingProperty() throws IOException {
         PropertiesFile config = new PropertiesFile(TEST_FILE);
@@ -53,7 +59,10 @@ class PropertiesFileTest {
         assertEquals("22", config.getProperties().get("age"));
     }
 
-    //  Test adding a new key
+    /**
+     * Test adding a new key
+     * @throws IOException if any i/o error occurs
+     */
     @Test
     void testAddNewProperty() throws IOException {
         PropertiesFile config = new PropertiesFile(TEST_FILE);
@@ -62,7 +71,10 @@ class PropertiesFileTest {
         assertEquals("Tamil Nadu", config.getProperties().get("state"));
     }
 
-    // Test writing updates to disk
+    /**
+     * Test writing updates to disk
+     * @throws IOException if any i/o error occurs
+     */
     @Test
     void testWriteProperties() throws IOException {
         PropertiesFile config = new PropertiesFile(TEST_FILE);
@@ -74,7 +86,10 @@ class PropertiesFileTest {
         assertEquals("30", reloaded.getProperties().get("age"));
     }
 
-    //  Test file not existing
+    /**
+     * Test file not existing
+     * @throws IOException if any i/o error occurs
+     */
     @Test
     void testFileNotExists() throws IOException {
         String nonExistentFile = "missing.properties";
@@ -84,7 +99,11 @@ class PropertiesFileTest {
         assertTrue(config.getProperties().isEmpty());
     }
 
-    //  Test comments and empty lines are ignored
+
+    /**
+     * Test comments and empty lines are ignored
+     * @throws IOException if any i/o error occurs
+     */
     @Test
     void testCommentsIgnored() throws IOException {
         PropertiesFile config = new PropertiesFile(TEST_FILE);
@@ -94,7 +113,10 @@ class PropertiesFileTest {
         assertFalse(props.containsKey("! another comment"));
     }
 
-    // Test defensive copy (modifying returned map should not affect original)
+    /**
+     * Test defensive copy (modifying returned map should not affect original)
+     * @throws IOException if any i/o error occurs
+     */
     @Test
     void testDefensiveCopy() throws IOException {
         PropertiesFile config = new PropertiesFile(TEST_FILE);
@@ -105,7 +127,10 @@ class PropertiesFileTest {
         assertFalse(config.getProperties().containsKey("hacked"));
     }
 
-    //  Test multiple writes overwrite correctly
+    /**
+     * Test multiple writes overwrite correctly
+     * @throws IOException if any i/o error occurs
+     */
     @Test
     void testMultipleWrites() throws IOException {
         PropertiesFile config = new PropertiesFile(TEST_FILE);

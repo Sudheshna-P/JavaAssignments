@@ -37,17 +37,30 @@ public class PropertiesFile {
                 if (line.isEmpty() || line.startsWith("#") || line.startsWith("!")) continue;
                 int index = -1;
                 boolean escaped = false;
+
                 for (int i = 0; i < line.length(); i++) {
                     char ch = line.charAt(i);
+
                     if (ch == '\\') {
                         escaped = !escaped;
                         continue;
                     }
-                    if (!escaped && (ch == '=' || ch == ':')|| Character.isWhitespace(ch)) {
+
+                    if (!escaped && (ch == '=' || ch == ':')) {
                         index = i;
                         break;
                     }
+
                     escaped = false;
+                }
+
+                if (index == -1) {
+                    for (int i = 0; i < line.length(); i++) {
+                        if (Character.isWhitespace(line.charAt(i))) {
+                            index = i;
+                            break;
+                        }
+                    }
                 }
 
                 if (index > 0) {

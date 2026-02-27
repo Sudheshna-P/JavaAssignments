@@ -1,6 +1,5 @@
 import java.io.*;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -12,7 +11,7 @@ public class PropertiesFile {
 
     public PropertiesFile(String path) throws IOException {
         this.path = path;
-        this.properties = new ConcurrentHashMap<>(readProperties());
+        this.properties = new HashMap<>(readProperties());
     }
 
     private Map<String, String> readProperties() throws IOException {

@@ -2,6 +2,9 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 public class PropertiesFile {
 
@@ -89,19 +92,17 @@ public class PropertiesFile {
     public void writeProperties() throws IOException {
         lock.writeLock().lock();
         try {
-            File originalFile = new File(path);
-            File tempFile = new File(path + ".tmp");
+            Path originalPath = Path.of(path);
+            Path tempPath = Path.of(path + ".tmp");
 
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
+            try (BufferedWriter writer = Files.newBufferedWriter(tempPath)) {
                 for (Map.Entry<String, String> entry : properties.entrySet()) {
                     writer.write(entry.getKey() + "=" + entry.getValue());
                     writer.newLine();
                 }
             }
 
-            if (!tempFile.renameTo(originalFile)) {
-                throw new IOException("Could not replace original file");
-            }
+            Files.move(tempPath, originalPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
 
         } finally {
             lock.writeLock().unlock();

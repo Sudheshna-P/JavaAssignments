@@ -122,24 +122,35 @@ public class DirectoryTraversal {
      */
     public static boolean containsKeywordInBinary(File file, String keyword) {
         byte[] keywordBytes = keyword.getBytes();
+        int bufferSize = 8192; // 8 KB buffer
 
-        try {
-            Path path = file.toPath();
-            if (Files.isSymbolicLink(path)) return false; // skip symbolic links
-            if (!Files.exists(path) || !Files.isRegularFile(path)) return false; // skip non-existent or special files
+        try (InputStream is = new BufferedInputStream(new FileInputStream(file))) {
 
-            byte[] fileBytes = Files.readAllBytes(path);
+            byte[] buffer = new byte[bufferSize + keywordBytes.length];
+            int bytesRead;
+            int overlap = 0;
 
-            for (int i = 0; i <= fileBytes.length - keywordBytes.length; i++) {
-                boolean match = true;
-                for (int j = 0; j < keywordBytes.length; j++) {
-                    if (fileBytes[i + j] != keywordBytes[j]) {
-                        match = false;
-                        break;
+            while ((bytesRead = is.read(buffer, overlap, bufferSize)) != -1) {
+
+                int totalBytes = bytesRead + overlap;
+
+                for (int i = 0; i <= totalBytes - keywordBytes.length; i++) {
+                    boolean match = true;
+
+                    for (int j = 0; j < keywordBytes.length; j++) {
+                        if (buffer[i + j] != keywordBytes[j]) {
+                            match = false;
+                            break;
+                        }
                     }
+
+                    if (match) return true;
                 }
-                if (match) return true;
+
+                overlap = Math.min(keywordBytes.length - 1, totalBytes);
+                System.arraycopy(buffer, totalBytes - overlap, buffer, 0, overlap);
             }
+
         } catch (IOException e) {
             e.printStackTrace();
         }

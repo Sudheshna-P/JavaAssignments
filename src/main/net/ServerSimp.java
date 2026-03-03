@@ -5,26 +5,19 @@ import java.util.logging.Level;
 
 public class ServerSimp {
 
-    private static final int PORT = 3000;
-    private static final Logger logger =
-            Logger.getLogger(ServerSimp.class.getName());
-
-    public static void main(String[] args) {
-        new ServerSimp().start();
-    }
+    private static final int port = 3000;
+    private static final Logger logger=Logger.getLogger(ServerSimp.class.getName());
 
     public void start() {
-        logger.info("Server started on port " + PORT);
+        logger.info("Server started on port: " + port);
 
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-
+        try (ServerSocket ss = new ServerSocket(port)) {
             while (true) {
-                Socket socket = serverSocket.accept();
+                Socket socket = ss.accept();
                 logger.info("Client connected: " + socket.getInetAddress());
 
                 handleClient(socket);
             }
-
         } catch (IOException e) {
             logger.log(Level.SEVERE, "Server error", e);
         }
@@ -32,17 +25,13 @@ public class ServerSimp {
 
     private void handleClient(Socket socket) {
 
-        try (socket;
-             BufferedReader in = new BufferedReader(
-                     new InputStreamReader(socket.getInputStream()));
-             BufferedWriter out = new BufferedWriter(
-                     new OutputStreamWriter(socket.getOutputStream()))) {
+        try(BufferedReader in = new BufferedReader( new InputStreamReader(socket.getInputStream()));
+            BufferedWriter out = new BufferedWriter( new OutputStreamWriter(socket.getOutputStream()))) {
 
             String message;
 
             while ((message = in.readLine()) != null) {
-
-                if ("exit".equalsIgnoreCase(message)) {
+                if("exit".equalsIgnoreCase(message)){
                     break;
                 }
 
@@ -58,5 +47,10 @@ public class ServerSimp {
         }
 
         logger.info("Client disconnected");
+    }
+
+    public static void main (String [] args) {
+        ServerSimp s= new ServerSimp();
+        s.start();
     }
 }

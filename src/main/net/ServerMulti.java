@@ -1,45 +1,33 @@
-import java.io.*;
-import java.net.*;
+import java.io.IOException;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class ServerMulti {
-    public static void main(String [] args){
 
-        try (ServerSocket server = new ServerSocket(3000)) {
+    private static final int port = 3000;
+    private static final Logger logger = Logger.getLogger(ServerMulti.class.getName());
+
+    public void start() {
+        logger.info("Multi-threaded Server started on port: " + port);
+
+        try (ServerSocket serverSocket = new ServerSocket(port)) {
 
             while (true) {
-                Socket client = server.accept();
-                System.out.println("New Client connected: " + client.getInetAddress());
-                new Thread(new ClientHandler(client)).start();
+                Socket clientSocket = serverSocket.accept();
+                logger.info("Client connected: " + clientSocket.getInetAddress());
+
+                Thread thread = new Thread(new ClientHandler(clientSocket));
+                thread.start();
             }
 
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.log(Level.SEVERE, "Server error", e);
         }
-
     }
 
-    private static class ClientHandler implements Runnable{
-
-        private final Socket clientSocket;
-        public ClientHandler(Socket socket){
-            this.clientSocket=socket;
-        }
-        public void run() {
-            try (BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                 PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true)) {
-                String line;
-                while ((line = in.readLine()) != null) {
-                    out.println(line);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                try {
-                    clientSocket.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
+    public static void main(String[] args) {
+        new ServerMulti().start();
     }
 }

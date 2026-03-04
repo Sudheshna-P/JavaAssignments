@@ -15,10 +15,10 @@ public class ServerMulti {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
 
             while (true) {
-                Socket clientSocket = serverSocket.accept();
-                logger.info("Client connected: " + clientSocket.getInetAddress());
+                Socket socket = serverSocket.accept();
+                logger.info("Client connected: " + socket.getInetAddress());
 
-                Thread thread = new Thread(new ClientHandler(clientSocket));
+                Thread thread = new Thread(new ClientHandler(socket));
                 thread.start();
             }
 

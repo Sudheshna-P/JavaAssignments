@@ -17,6 +17,7 @@ public class ServerSimp {
                 logger.info("Client connected: " + socket.getInetAddress());
 
                 handleClient(socket);
+                //new Thread(() -> handleClient(socket)).start(); //multi threaded version
             }
         } catch (IOException e) {
             logger.log(Level.SEVERE, "Server error", e);

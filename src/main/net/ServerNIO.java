@@ -57,6 +57,7 @@ public class ServerNIO {
         SocketChannel client = (SocketChannel) key.channel();
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         int bytesRead = client.read(buffer);
+        System.out.println("Read bytes: " + bytesRead);
 
         if (bytesRead == -1) {
             client.close();

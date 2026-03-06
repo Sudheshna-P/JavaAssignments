@@ -1,95 +1,93 @@
 import java.io.FileWriter;
+import java.io.IOException;
 import java.time.LocalDateTime;
 
-/**
- * Abstract Logger class.
- * Any class extending Logger must implement the log(String msg) method.
- */
 abstract class Logger {
-
-    /**
-     * Logs the given message.
-     * @param msg the message to be logged
-     */
     abstract void log(String msg);
 }
 
-/**
- * FileLogger logs messages into a file.
- *
- * <p>
- * This class extends the Logger abstract class and provides
- * an implementation of the log method that writes messages into a file named {@code log.txt}.
- * </p>
- */
 class FileLogger extends Logger {
+    private final String filePath;
+    private final Object lock = new Object();
 
-    /**
-     * Logs the given message into the log file.
-     *
-     * @param msg the message to be logged
-     */
+    public FileLogger(String filePath) {
+        this.filePath = filePath;
+    }
+
+    @Override
     void log(String msg) {
-        try {
-            FileWriter fw = new FileWriter(
-                    "/home/sudheshna/IdeaProjects/JavaAssignments/src/main/io/log.txt",
-                    true
-            );
-            fw.write(msg + "\n");
-            fw.close();
-        } catch (Exception e) {
-            System.out.println("Exception " + e + " is caught");
+        synchronized (lock) {
+            try (FileWriter fw = new FileWriter(filePath, true)) {
+                fw.write(msg + "\n");
+            } catch (IOException e) {
+                System.out.println("Exception " + e + " is caught");
+            }
         }
     }
 }
 
-/**
- * ConsoleLogger logs messages to the console.
- */
-class ConsoleLogger extends Logger {
-
-    /**
-     * Prints the given message to the console.
-     *
-     * @param msg the message to be logged
-     */
-    void log(String msg) {
-        System.out.println(msg);
-    }
-}
-
-/**
- * TimeFileLogger logs messages into a file along with timestamp.
- */
 class TimeFileLogger extends FileLogger {
+    public TimeFileLogger(String filePath) {
+        super(filePath);
+    }
 
-    /**
-     * Logs the given message with a timestamp into the log file.
-     *
-     * @param msg the message to be logged
-     */
+    @Override
     void log(String msg) {
         String timeMsg = LocalDateTime.now() + " : " + msg;
         super.log(timeMsg);
     }
 }
 
-/**
- * CustomLogger is the driver class.
- */
-public class CustomLogger {
+class ConsoleLogger extends Logger {
+    @Override
+    void log(String msg) {
+        System.out.println(msg);
+    }
+}
 
+class LoggerManager {
+    private Logger logger;
+
+    public LoggerManager(Logger logger) {
+        this.logger = logger;
+    }
+
+    public void setLogger(Logger logger) {
+        this.logger = logger;
+    }
+
+    public void log(String msg) {
+        logger.log(msg);
+    }
+}
+
+public class CustomLogger {
     public static void main(String[] args) {
 
-        Logger l;
+        String logFilePath = "/home/sudheshna/IdeaProjects/JavaAssignments/src/main/ioOutput/log.txt";
 
-        l = new FileLogger();
-        l.log("File log is executed");
+        LoggerManager manager = new LoggerManager(new FileLogger(logFilePath));
+        manager.log("File log executed");
 
-        l = new TimeFileLogger();
-        l.log("Hello");
+        manager.setLogger(new TimeFileLogger(logFilePath));
+        manager.log("Timestamped log executed");
 
-        l = new ConsoleLogger();
-        l.log("Console log is executed");
+        manager.setLogger(new ConsoleLogger());
+        manager.log("Console log executed");
+
+        Runnable task = new Runnable() {
+            @Override
+            public void run() {
+                for (int i = 0; i < 5; i++) {
+                    manager.log(Thread.currentThread().getName() + " logging " + i);
+                }
+            }
+        };
+
+        Thread t1 = new Thread(task, "Thread-1");
+        Thread t2 = new Thread(task, "Thread-2");
+
+        t1.start();
+        t2.start();
     }
 }

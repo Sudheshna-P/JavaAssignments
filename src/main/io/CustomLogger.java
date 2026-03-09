@@ -52,7 +52,7 @@ class LoggerManager {
         this.logger = logger;
     }
 
-    public void setLogger(Logger logger) {
+    public synchronized void setLogger(Logger logger) {
         this.logger = logger;
     }
 

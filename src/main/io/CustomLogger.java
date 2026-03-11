@@ -1,6 +1,8 @@
 import java.io.*;
 import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 enum LogLevel {
     INFO,
@@ -18,34 +20,56 @@ class FileLogger extends Logger {
     private final long maxFileSize;
     private final Object lock = new Object();
 
+    private final BlockingQueue<String> logQueue = new LinkedBlockingQueue<>();
+
     public FileLogger(String filePath, long maxFileSize) {
         this.filePath = filePath;
         this.maxFileSize = maxFileSize;
+
+        startLogWriter();
     }
 
     @Override
     public void log(LogLevel level, String message) {
 
-        synchronized (lock) {
-            try {
+        String logMessage = LocalDateTime.now()
+                + " [" + level + "] "
+                + message;
 
-                rotateFileIfNeeded();
+        logQueue.offer(logMessage);
+    }
 
-                try (FileWriter fw = new FileWriter(filePath, true);
-                     BufferedWriter bw = new BufferedWriter(fw)) {
+    private void startLogWriter() {
 
-                    String logMessage = LocalDateTime.now()
-                            + " [" + level + "] "
-                            + message;
+        Thread worker = new Thread(() -> {
 
-                    bw.write(logMessage);
-                    bw.newLine();
+            while (true) {
+
+                try {
+
+                    String logMessage = logQueue.take();
+
+                    synchronized (lock) {
+
+                        rotateFileIfNeeded();
+
+                        try (BufferedWriter bw =
+                                     new BufferedWriter(new FileWriter(filePath, true))) {
+
+                            bw.write(logMessage);
+                            bw.newLine();
+                        }
+                    }
+
+                } catch (Exception e) {
+                    System.out.println("Logging error: " + e);
                 }
-
-            } catch (IOException e) {
-                System.out.println("Logging error: " + e);
             }
-        }
+
+        });
+
+        worker.setDaemon(true);
+        worker.start();
     }
 
     private void rotateFileIfNeeded() {
@@ -54,13 +78,25 @@ class FileLogger extends Logger {
 
         if (file.exists() && file.length() >= maxFileSize) {
 
-            File backup = new File(filePath + ".1");
+            int maxBackups = 3;
 
-            if (backup.exists()) {
-                backup.delete();
+            File oldest = new File(filePath + "." + maxBackups);
+            if (oldest.exists()) {
+                oldest.delete();
             }
 
-            file.renameTo(backup);
+            for (int i = maxBackups - 1; i>= 1; i--) {
+
+                File current = new File(filePath + "." + i);
+
+                if (current.exists()) {
+                    File next = new File(filePath + "." + (i + 1));
+                    current.renameTo(next);
+                }
+            }
+
+            File firstBackup = new File(filePath + ".1");
+            file.renameTo(firstBackup);
         }
     }
 }

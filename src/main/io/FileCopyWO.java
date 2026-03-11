@@ -18,6 +18,12 @@ class FileCopyWO {
         File inFile = new File("src/main/io/file1.txt");
         File outFile = new File("src/main/io/file3.txt");
 
+        // Get a FileLogger
+        Logger fileLogger = LoggerFactory.getFileLogger("filecopy.log");
+
+// Wrap it in LoggerManager
+        LoggerManager logger = new LoggerManager(fileLogger);
+
         FileInputStream in=null;
         FileOutputStream out=null;
 
@@ -27,7 +33,7 @@ class FileCopyWO {
         }
         catch(FileNotFoundException e){
             String message = e.getMessage();
-            System.out.println(message);
+            logger.error(message);
         }
 
         long start = System.currentTimeMillis();
@@ -40,7 +46,7 @@ class FileCopyWO {
             }
         }
         long end = System.currentTimeMillis();
-        System.out.println("Time taken: " + (end - start));
+        logger.info("Time taken: " + (end - start));
 
         if (in != null) in.close();
         if (out !=null) out.close();

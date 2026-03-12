@@ -19,7 +19,7 @@ class FileCopyWO {
         File outFile = new File("src/main/io/file3.txt");
 
         // Get a FileLogger
-        Logger fileLogger = LoggerFactory.getFileLogger("filecopy.log");
+        Logger fileLogger = LoggerCreator.getFileLogger("filecopy.log");
 
 // Wrap it in LoggerManager
         LoggerManager logger = new LoggerManager(fileLogger);

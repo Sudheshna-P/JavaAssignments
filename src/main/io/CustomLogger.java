@@ -14,6 +14,7 @@ abstract class Logger {
     abstract void log(LogLevel level, String message);
 }
 
+//@SuppressWarnings("ALL")
 class FileLogger extends Logger {
 
     private final String filePath;
@@ -26,43 +27,37 @@ class FileLogger extends Logger {
         this.filePath = filePath;
         this.maxFileSize = maxFileSize;
 
-        startLogWriter();
+        logWriter();
     }
 
     @Override
     public void log(LogLevel level, String message) {
 
-        String logMessage = LocalDateTime.now()
-                + " [" + level + "] "
-                + message;
+        String logMessage = LocalDateTime.now() + " [" + level + "] " + message;
 
         logQueue.offer(logMessage);
     }
 
-    private void startLogWriter() {
+    private void logWriter() {
 
         Thread worker = new Thread(() -> {
 
             while (true) {
 
                 try {
-
                     String logMessage = logQueue.take();
 
                     synchronized (lock) {
-
                         rotateFileIfNeeded();
 
-                        try (BufferedWriter bw =
-                                     new BufferedWriter(new FileWriter(filePath, true))) {
-
+                        try (BufferedWriter bw = new BufferedWriter(new FileWriter(filePath, true))) {
                             bw.write(logMessage);
                             bw.newLine();
                         }
                     }
 
                 } catch (Exception e) {
-                    System.out.println("Logging error: " + e);
+                    e.printStackTrace();
                 }
             }
 
@@ -92,11 +87,13 @@ class FileLogger extends Logger {
                 if (current.exists()) {
                     File next = new File(filePath + "." + (i + 1));
                     current.renameTo(next);
+
                 }
             }
 
             File firstBackup = new File(filePath + ".1");
             file.renameTo(firstBackup);
+
         }
     }
 }
@@ -106,22 +103,19 @@ class ConsoleLogger extends Logger {
     @Override
     void log(LogLevel level, String message) {
 
-        String logMessage = LocalDateTime.now()
-                + " [" + level + "] "
-                + message;
+        String logMessage = LocalDateTime.now() + " (" + level + ") " + message;
 
         System.out.println(logMessage);
     }
 }
 
-class LoggerFactory {
+class LoggerCreator {
 
     private static final ConcurrentHashMap<String, Logger> loggers = new ConcurrentHashMap<>();
 
     public static Logger getFileLogger(String filePath) {
 
-        return loggers.computeIfAbsent(filePath,
-                path -> new FileLogger(path, 1024 * 1024));
+        return loggers.computeIfAbsent(filePath, path -> new FileLogger(path, 1024 * 1024));
     }
 
     public static Logger getConsoleLogger() {
@@ -158,7 +152,7 @@ public class CustomLogger {
 
     public static void main(String[] args) {
 
-        Logger fileLogger = LoggerFactory.getFileLogger("application.log");
+        Logger fileLogger = LoggerCreator.getFileLogger("application.log");
 
         LoggerManager manager = new LoggerManager(fileLogger);
 
@@ -166,7 +160,7 @@ public class CustomLogger {
         manager.debug("Debugging info");
         manager.error("Something went wrong");
 
-        Logger consoleLogger = LoggerFactory.getConsoleLogger();
+        Logger consoleLogger = LoggerCreator.getConsoleLogger();
         manager.setLogger(consoleLogger);
 
         manager.info("Logging to console now");

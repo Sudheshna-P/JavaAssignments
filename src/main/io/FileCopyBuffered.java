@@ -19,6 +19,10 @@ class FileCopyBuffered {
         File inFile = new File("src/main/io/file1.txt");
         File outFile = new File("src/main/io/file2.txt");
 
+        Logger fileLogger = LoggerCreator.getFileLogger("filecopyBuff.log");
+
+        LoggerManager logger = new LoggerManager(fileLogger);
+
         BufferedInputStream in=null;
         BufferedOutputStream out=null;
 
@@ -27,7 +31,7 @@ class FileCopyBuffered {
             out = new BufferedOutputStream(new FileOutputStream(outFile));
         }
         catch(FileNotFoundException e){
-            System.out.println(e.getMessage());
+            logger.error(e.getMessage());
         }
 
         long start = System.nanoTime();
@@ -39,8 +43,8 @@ class FileCopyBuffered {
                 }
             }
         }
-        long end = System.currentTimeMillis();
-        System.out.println("Time taken: " + (end - start));
+        long end = System.nanoTime();
+        logger.info("Time taken: " + (end - start));
 
         if (in != null) in.close();
         if (out !=null) out.close();

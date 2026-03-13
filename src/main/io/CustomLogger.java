@@ -44,6 +44,7 @@ class FileLogger extends Logger {
 
             while (true) {
 
+
                 try {
                     String logMessage = logQueue.take();
 
@@ -55,12 +56,10 @@ class FileLogger extends Logger {
                             bw.newLine();
                         }
                     }
-
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
-
         });
 
         worker.setDaemon(true);

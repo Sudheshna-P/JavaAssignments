@@ -1,5 +1,7 @@
 import java.io.*;
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -44,19 +46,18 @@ class FileLogger extends Logger {
 
             while (true) {
 
-
                 try {
                     String logMessage = logQueue.take();
 
-                    synchronized (lock) {
-                        rotateFileIfNeeded();
+                    rotateFileIfNeeded();
 
-                        try (BufferedWriter bw = new BufferedWriter(new FileWriter(filePath, true))) {
-                            bw.write(logMessage);
-                            bw.newLine();
-                        }
+                    try (BufferedWriter bw = new BufferedWriter(new FileWriter(filePath, true))) {
+                        bw.write(logMessage);
+                        bw.newLine();
                     }
-                } catch (Exception e) {
+
+
+                } catch (IOException | InterruptedException e) {
                     e.printStackTrace();
                 }
             }
@@ -124,26 +125,28 @@ class LoggerCreator {
 
 class LoggerManager {
 
-    private Logger logger;
+    private final List<Logger> loggers;
 
-    public LoggerManager(Logger logger) {
-        this.logger = logger;
-    }
-
-    public synchronized void setLogger(Logger logger) {
-        this.logger = logger;
+    public LoggerManager(List<Logger> loggers) {
+        this.loggers = loggers;
     }
 
     public void info(String message) {
-        logger.log(LogLevel.INFO, message);
+        for (Logger logger : loggers) {
+            logger.log(LogLevel.INFO, message);
+        }
     }
 
     public void debug(String message) {
-        logger.log(LogLevel.DEBUG, message);
+        for (Logger logger : loggers) {
+            logger.log(LogLevel.DEBUG, message);
+        }
     }
 
     public void error(String message) {
-        logger.log(LogLevel.ERROR, message);
+        for (Logger logger : loggers) {
+            logger.log(LogLevel.ERROR, message);
+        }
     }
 }
 
@@ -152,17 +155,16 @@ public class CustomLogger {
     public static void main(String[] args) {
 
         Logger fileLogger = LoggerCreator.getFileLogger("application.log");
+        Logger consoleLogger = LoggerCreator.getConsoleLogger();
 
-        LoggerManager manager = new LoggerManager(fileLogger);
+        LoggerManager manager = new LoggerManager(
+                Arrays.asList(fileLogger, consoleLogger)
+        );
 
         manager.info("Application started");
         manager.debug("Debugging info");
         manager.error("Something went wrong");
 
-        Logger consoleLogger = LoggerCreator.getConsoleLogger();
-        manager.setLogger(consoleLogger);
-
-        manager.info("Logging to console now");
 
         Runnable task = () -> {
 

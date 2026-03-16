@@ -1,4 +1,5 @@
 import java.io.*;
+import java.util.List;
 
 /**
  * FileCopyWO copies the contents of one file to another
@@ -19,8 +20,7 @@ class FileCopyWO {
         File outFile = new File("src/main/io/file3.txt");
 
         Logger fileLogger = LoggerCreator.getFileLogger("filecopy.log");
-
-        LoggerManager logger = new LoggerManager(fileLogger);
+        LoggerManager logger = new LoggerManager(List.of(fileLogger));
 
         FileInputStream in=null;
         FileOutputStream out=null;
@@ -43,7 +43,7 @@ class FileCopyWO {
                 }
             }
         }
-        long end = System.currentTimeMillis();
+        long end = System.nanoTime();
         logger.info("Time taken: " + (end - start));
 
         if (in != null) in.close();

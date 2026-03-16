@@ -1,4 +1,6 @@
 import java.io.*;
+import java.util.List;
+
 /**
  * FileCopyBuffered copies the contents of one file to another
  * using BufferedInputStream and BufferedOutputStream.
@@ -19,9 +21,9 @@ class FileCopyBuffered {
         File inFile = new File("src/main/io/file1.txt");
         File outFile = new File("src/main/io/file2.txt");
 
+        Logger consoleLogger = LoggerCreator.getConsoleLogger();
         Logger fileLogger = LoggerCreator.getFileLogger("filecopyBuff.log");
-
-        LoggerManager logger = new LoggerManager(fileLogger);
+        LoggerManager logger = new LoggerManager(List.of(fileLogger, consoleLogger));
 
         BufferedInputStream in=null;
         BufferedOutputStream out=null;

@@ -19,7 +19,7 @@ class FileCopyWO {
         File inFile = new File("src/main/io/file1.txt");
         File outFile = new File("src/main/io/file3.txt");
 
-        Logger fileLogger = LoggerCreator.getFileLogger("filecopy.log");
+        Logger fileLogger = LoggerFactory.getFileLogger("filecopy.log");
         LoggerManager logger = new LoggerManager(List.of(fileLogger));
 
         FileInputStream in=null;

@@ -21,8 +21,8 @@ class FileCopyBuffered {
         File inFile = new File("src/main/io/file1.txt");
         File outFile = new File("src/main/io/file2.txt");
 
-        Logger consoleLogger = LoggerCreator.getConsoleLogger();
-        Logger fileLogger = LoggerCreator.getFileLogger("filecopyBuff.log");
+        Logger consoleLogger = LoggerFactory.getConsoleLogger();
+        Logger fileLogger = LoggerFactory.getFileLogger("filecopyBuff.log");
         LoggerManager logger = new LoggerManager(List.of(fileLogger, consoleLogger));
 
         BufferedInputStream in=null;

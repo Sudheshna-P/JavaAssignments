@@ -16,12 +16,11 @@ abstract class Logger {
     abstract void log(LogLevel level, String message);
 }
 
-//@SuppressWarnings("ALL")
 class FileLogger extends Logger {
 
     private final String filePath;
     private final long maxFileSize;
-    private final Object lock = new Object();
+    private BufferedWriter bw;
 
     private final BlockingQueue<String> logQueue = new LinkedBlockingQueue<>();
 
@@ -29,15 +28,21 @@ class FileLogger extends Logger {
         this.filePath = filePath;
         this.maxFileSize = maxFileSize;
 
+        try {
+            this.bw = new BufferedWriter(new FileWriter(filePath, true));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
         logWriter();
     }
 
     @Override
     public void log(LogLevel level, String message) {
-
         String logMessage = LocalDateTime.now() + " [" + level + "] " + message;
-
-        logQueue.offer(logMessage);
+        if (!logQueue.offer(logMessage)) {
+            System.err.println("Log queue is full");
+        }
     }
 
     private void logWriter() {
@@ -45,56 +50,61 @@ class FileLogger extends Logger {
         Thread worker = new Thread(() -> {
 
             while (true) {
-
                 try {
                     String logMessage = logQueue.take();
 
                     rotateFileIfNeeded();
 
-                    try (BufferedWriter bw = new BufferedWriter(new FileWriter(filePath, true))) {
-                        bw.write(logMessage);
-                        bw.newLine();
-                    }
-
+                    bw.write(logMessage);
+                    bw.newLine();
+                    bw.flush();
 
                 } catch (IOException | InterruptedException e) {
                     e.printStackTrace();
                 }
             }
+
         });
 
         worker.setDaemon(true);
         worker.start();
     }
 
-    private void rotateFileIfNeeded() {
+    private void rotateFileIfNeeded() throws IOException {
 
         File file = new File(filePath);
 
-        if (file.exists() && file.length() >= maxFileSize) {
+        if (!file.exists() || file.length() < maxFileSize) return;
 
-            int maxBackups = 3;
+        bw.close();
 
-            File oldest = new File(filePath + "." + maxBackups);
-            if (oldest.exists()) {
-                oldest.delete();
+        int maxBackups = 3;
+
+        File oldest = new File(filePath + "." + maxBackups);
+        if (oldest.exists()) {
+            if (!oldest.delete()) {
+                throw new IOException("Failed to delete oldest backup: " + oldest.getAbsolutePath());
             }
-
-            for (int i = maxBackups - 1; i>= 1; i--) {
-
-                File current = new File(filePath + "." + i);
-
-                if (current.exists()) {
-                    File next = new File(filePath + "." + (i + 1));
-                    current.renameTo(next);
-
-                }
-            }
-
-            File firstBackup = new File(filePath + ".1");
-            file.renameTo(firstBackup);
-
         }
+
+        for (int i = maxBackups - 1; i >= 1; i--) {
+            File current = new File(filePath + "." + i);
+
+            if (!current.exists()) continue;
+
+            File next = new File(filePath + "." + (i + 1));
+
+            if (!current.renameTo(next)) {
+                System.err.println("Failed to rename the file");
+            }
+        }
+
+        File firstBackup = new File(filePath + ".1");
+        if (!file.renameTo(firstBackup)) {
+            System.err.println("Failed to rename log file to backup");
+        }
+
+        bw = new BufferedWriter(new FileWriter(filePath, true));
     }
 }
 
@@ -102,19 +112,20 @@ class ConsoleLogger extends Logger {
 
     @Override
     void log(LogLevel level, String message) {
-
-        String logMessage = LocalDateTime.now() + " (" + level + ") " + message;
-
-        System.out.println(logMessage);
+        String logMessage = LocalDateTime.now() + " [" + level + "] " + message;
+        try {
+            System.out.println(logMessage);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
 
-class LoggerCreator {
+class LoggerFactory {
 
     private static final ConcurrentHashMap<String, Logger> loggers = new ConcurrentHashMap<>();
 
     public static Logger getFileLogger(String filePath) {
-
         return loggers.computeIfAbsent(filePath, path -> new FileLogger(path, 1024 * 1024));
     }
 
@@ -131,22 +142,27 @@ class LoggerManager {
         this.loggers = loggers;
     }
 
-    public void info(String message) {
+    private void log(LogLevel level, String msg) {
         for (Logger logger : loggers) {
-            logger.log(LogLevel.INFO, message);
+            try {
+                logger.log(level, msg);
+            } catch (Exception e) {
+                System.err.println("Logger failed "+ e.getMessage());
+                e.printStackTrace();
+            }
         }
+    }
+
+    public void info(String message) {
+        log(LogLevel.INFO, message);
     }
 
     public void debug(String message) {
-        for (Logger logger : loggers) {
-            logger.log(LogLevel.DEBUG, message);
-        }
+        log(LogLevel.DEBUG, message);
     }
 
     public void error(String message) {
-        for (Logger logger : loggers) {
-            logger.log(LogLevel.ERROR, message);
-        }
+        log(LogLevel.ERROR, message);
     }
 }
 
@@ -154,8 +170,8 @@ public class CustomLogger {
 
     public static void main(String[] args) {
 
-        Logger fileLogger = LoggerCreator.getFileLogger("application.log");
-        Logger consoleLogger = LoggerCreator.getConsoleLogger();
+        Logger fileLogger = LoggerFactory.getFileLogger("application.log");
+        Logger consoleLogger = LoggerFactory.getConsoleLogger();
 
         LoggerManager manager = new LoggerManager(
                 Arrays.asList(fileLogger, consoleLogger)
@@ -165,13 +181,10 @@ public class CustomLogger {
         manager.debug("Debugging info");
         manager.error("Something went wrong");
 
-
         Runnable task = () -> {
-
             for (int i = 0; i < 5; i++) {
                 manager.info(Thread.currentThread().getName() + " message " + i);
             }
-
         };
 
         Thread t1 = new Thread(task, "Thread-1");

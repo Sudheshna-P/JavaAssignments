@@ -1,86 +1,197 @@
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+
+enum LogLevel {
+    INFO,
+    DEBUG,
+    ERROR
+}
 
 abstract class Logger {
-    abstract void log(String msg);
+    abstract void log(LogLevel level, String message);
 }
 
 class FileLogger extends Logger {
-    private final String filePath;
-    private final Object lock = new Object();
 
-    public FileLogger(String filePath) {
+    private final String filePath;
+    private final long maxFileSize;
+    private BufferedWriter bw;
+
+    private final BlockingQueue<String> logQueue = new LinkedBlockingQueue<>();
+
+    public FileLogger(String filePath, long maxFileSize) {
         this.filePath = filePath;
+        this.maxFileSize = maxFileSize;
+
+        try {
+            this.bw = new BufferedWriter(new FileWriter(filePath, true));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to initialize FileLogger", e);
+        }
+
+        logWriter();
     }
 
     @Override
-    void log(String msg) {
-        synchronized (lock) {
-            try (FileWriter fw = new FileWriter(filePath, true)) {
-                fw.write(msg + "\n");
-            } catch (IOException e) {
-                System.out.println("Exception " + e + " is caught");
-            }
+    public void log(LogLevel level, String message) {
+        String logMessage = LocalDateTime.now() + " [" + level + "] " + message;
+        if (!logQueue.offer(logMessage)) {
+            System.err.println("Log queue is full");
         }
     }
-}
 
-class TimeFileLogger extends FileLogger {
-    public TimeFileLogger(String filePath) {
-        super(filePath);
+    private void logWriter() {
+
+        Thread worker = new Thread(() -> {
+
+            while (true) {
+                try {
+                    String logMessage = logQueue.take();
+
+                    rotateFileIfNeeded();
+
+                    bw.write(logMessage);
+                    bw.newLine();
+                    bw.flush();
+
+                } catch (IOException | InterruptedException e) {
+                    System.err.println("Error writing log: " + e.getMessage());
+                }
+            }
+
+        });
+
+        worker.setDaemon(true);
+        worker.start();
     }
 
-    @Override
-    void log(String msg) {
-        String timeMsg = LocalDateTime.now() + " : " + msg;
-        super.log(timeMsg);
+    private void rotateFileIfNeeded() throws IOException {
+
+        File file = new File(filePath);
+
+        if (!file.exists() || file.length() < maxFileSize) return;
+
+        bw.close();
+
+        int maxBackups = 3;
+
+        File oldest = new File(filePath + "." + maxBackups);
+        if (oldest.exists()) {
+            if (!oldest.delete()) {
+                throw new IOException("Failed to delete oldest backup: " + oldest.getAbsolutePath());
+            }
+        }
+
+        for (int i = maxBackups - 1; i >= 1; i--) {
+            File current = new File(filePath + "." + i);
+
+            if (!current.exists()) continue;
+
+            File next = new File(filePath + "." + (i + 1));
+
+            if (!current.renameTo(next)) {
+                System.err.println("Failed to rename the file");
+            }
+        }
+
+        File firstBackup = new File(filePath + ".1");
+        if (!file.renameTo(firstBackup)) {
+            System.err.println("Failed to rename log file to backup");
+        }
+
+        bw = new BufferedWriter(new FileWriter(filePath, true));
     }
 }
 
 class ConsoleLogger extends Logger {
+
     @Override
-    void log(String msg) {
-        System.out.println(msg);
+    void log(LogLevel level, String message) {
+        String logMessage = LocalDateTime.now() + " [" + level + "] " + message;
+        try {
+            System.out.println(logMessage);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+class LoggerFactory {
+
+    private static final ConcurrentHashMap<String, Logger> loggers = new ConcurrentHashMap<>();
+
+    public static Logger getFileLogger(String filePath) {
+        return loggers.computeIfAbsent(filePath, path -> {
+            try {
+                return new FileLogger(path, 1024 * 1024);
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to create FileLogger for: " + path, e);
+            }
+        });
+    }
+
+    public static Logger getConsoleLogger() {
+        return new ConsoleLogger();
     }
 }
 
 class LoggerManager {
-    private Logger logger;
 
-    public LoggerManager(Logger logger) {
-        this.logger = logger;
+    private final List<Logger> loggers;
+
+    public LoggerManager(List<Logger> loggers) {
+        this.loggers = loggers;
     }
 
-    public synchronized void setLogger(Logger logger) {
-        this.logger = logger;
+    private void log(LogLevel level, String msg) {
+        for (Logger logger : loggers) {
+            try {
+                logger.log(level, msg);
+            } catch (Exception e) {
+                System.err.println("Logger failed "+ e.getMessage());
+                e.printStackTrace();
+            }
+        }
     }
 
-    public void log(String msg) {
-        logger.log(msg);
+    public void info(String message) {
+        log(LogLevel.INFO, message);
+    }
+
+    public void debug(String message) {
+        log(LogLevel.DEBUG, message);
+    }
+
+    public void error(String message) {
+        log(LogLevel.ERROR, message);
     }
 }
 
 public class CustomLogger {
+
     public static void main(String[] args) {
 
-        String logFilePath = "/home/sudheshna/IdeaProjects/JavaAssignments/src/main/ioOutput/log.txt";
+        Logger fileLogger = LoggerFactory.getFileLogger("application.log");
+        Logger consoleLogger = LoggerFactory.getConsoleLogger();
 
-        LoggerManager manager = new LoggerManager(new FileLogger(logFilePath));
-        manager.log("File log executed");
+        LoggerManager manager = new LoggerManager(
+                Arrays.asList(fileLogger, consoleLogger)
+        );
 
-        manager.setLogger(new TimeFileLogger(logFilePath));
-        manager.log("Timestamped log executed");
+        manager.info("Application started");
+        manager.debug("Debugging info");
+        manager.error("Something went wrong");
 
-        manager.setLogger(new ConsoleLogger());
-        manager.log("Console log executed");
-
-        Runnable task = new Runnable() {
-            @Override
-            public void run() {
-                for (int i = 0; i < 5; i++) {
-                    manager.log(Thread.currentThread().getName() + " logging " + i);
-                }
+        Runnable task = () -> {
+            for (int i = 0; i < 5; i++) {
+                manager.info(Thread.currentThread().getName() + " message " + i);
             }
         };
 

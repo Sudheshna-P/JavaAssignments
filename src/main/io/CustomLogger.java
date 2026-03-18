@@ -18,22 +18,21 @@ abstract class Logger {
 
 class FileLogger extends Logger {
 
-    private final String filePath;
+    private final String baseFileName;
     private final long maxFileSize;
+    private final int maxBackups;
+
     private BufferedWriter bw;
+    private File currentFile;
 
     private final BlockingQueue<String> logQueue = new LinkedBlockingQueue<>();
 
-    public FileLogger(String filePath, long maxFileSize) {
-        this.filePath = filePath;
+    public FileLogger(String baseFileName, long maxFileSize, int maxBackups) {
+        this.baseFileName = baseFileName;
         this.maxFileSize = maxFileSize;
+        this.maxBackups = maxBackups;
 
-        try {
-            this.bw = new BufferedWriter(new FileWriter(filePath, true));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
+        createNewLogFile();
         logWriter();
     }
 
@@ -46,67 +45,74 @@ class FileLogger extends Logger {
     }
 
     private void logWriter() {
-
         Thread worker = new Thread(() -> {
-
             while (true) {
                 try {
                     String logMessage = logQueue.take();
 
-                    rotateFileIfNeeded();
+                    rotateIfNeeded();
 
                     bw.write(logMessage);
                     bw.newLine();
-                    bw.flush();
+                    bw.flush(); // ✅ FIX
 
-                } catch (IOException | InterruptedException e) {
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
-
         });
 
-        worker.setDaemon(true);
+        // worker.setDaemon(true);
         worker.start();
     }
 
-    private void rotateFileIfNeeded() throws IOException {
-
-        File file = new File(filePath);
-
-        if (!file.exists() || file.length() < maxFileSize) return;
+    // 🔥 Hybrid rotation logic
+    private void rotateIfNeeded() throws IOException {
+        if (currentFile.length() < maxFileSize) return;
 
         bw.close();
+        createNewLogFile();
+        cleanupOldFiles();
+    }
 
-        int maxBackups = 3;
+    private void createNewLogFile() {
+        try {
+            String timestamp = java.time.LocalDateTime.now()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
 
-        File oldest = new File(filePath + "." + maxBackups);
-        if (oldest.exists()) {
-            if (!oldest.delete()) {
-                throw new IOException("Failed to delete oldest backup: " + oldest.getAbsolutePath());
+            String fileName = baseFileName + "-" + timestamp + ".log";
+
+            currentFile = new File(fileName);
+            bw = new BufferedWriter(new FileWriter(currentFile, true));
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    // ✅ Delete oldest files if limit exceeded
+    private void cleanupOldFiles() {
+        File dir = new File(".");
+        File[] logFiles = dir.listFiles((d, name) ->
+                name.startsWith(baseFileName) && name.endsWith(".log")
+        );
+
+        if (logFiles == null || logFiles.length <= maxBackups) return;
+
+        // Sort by last modified (oldest first)
+        Arrays.sort(logFiles, (f1, f2) ->
+                Long.compare(f1.lastModified(), f2.lastModified())
+        );
+
+        int filesToDelete = logFiles.length - maxBackups;
+
+        for (int i = 0; i < filesToDelete; i++) {
+            if (!logFiles[i].delete()) {
+                System.err.println("Failed to delete: " + logFiles[i].getName());
             }
         }
-
-        for (int i = maxBackups - 1; i >= 1; i--) {
-            File current = new File(filePath + "." + i);
-
-            if (!current.exists()) continue;
-
-            File next = new File(filePath + "." + (i + 1));
-
-            if (!current.renameTo(next)) {
-                System.err.println("Failed to rename the file");
-            }
-        }
-
-        File firstBackup = new File(filePath + ".1");
-        if (!file.renameTo(firstBackup)) {
-            System.err.println("Failed to rename log file to backup");
-        }
-
-        bw = new BufferedWriter(new FileWriter(filePath, true));
     }
 }
+
 
 class ConsoleLogger extends Logger {
 
@@ -126,7 +132,8 @@ class LoggerFactory {
     private static final ConcurrentHashMap<String, Logger> loggers = new ConcurrentHashMap<>();
 
     public static Logger getFileLogger(String filePath) {
-        return loggers.computeIfAbsent(filePath, path -> new FileLogger(path, 1024 * 1024));
+        return loggers.computeIfAbsent(filePath,
+                path -> new FileLogger(path, 1024 * 1024, 10)); // 1MB, max 10 files
     }
 
     public static Logger getConsoleLogger() {

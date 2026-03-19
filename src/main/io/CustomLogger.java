@@ -1,10 +1,14 @@
 import java.io.*;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.time.format.DateTimeFormatter;
+
+import static java.lang.System.exit;
 
 enum LogLevel {
     INFO,
@@ -16,103 +20,136 @@ abstract class Logger {
     abstract void log(LogLevel level, String message);
 }
 
+
 class FileLogger extends Logger {
 
-    private final String baseFileName;
+    private final String filePath;
     private final long maxFileSize;
-    private final int maxBackups;
 
     private BufferedWriter bw;
-    private File currentFile;
-
     private final BlockingQueue<String> logQueue = new LinkedBlockingQueue<>();
 
-    public FileLogger(String baseFileName, long maxFileSize, int maxBackups) {
-        this.baseFileName = baseFileName;
+    /**
+     * Logs the messages in File
+     * @param filePath - path of file
+     * @param maxFileSize - maximum size of file
+     */
+    public FileLogger(String filePath, long maxFileSize) {
+        this.filePath = filePath;
         this.maxFileSize = maxFileSize;
-        this.maxBackups = maxBackups;
 
-        createNewLogFile();
-        logWriter();
+        try {
+            this.bw = new BufferedWriter(new FileWriter(filePath, true));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to initialize FileLogger", e);
+        }
+
+        startWorker();
+//        Runtime.getRuntime().addShutdownHook(new Thread(() -> {flushLogs();}));
+//        try {
+//            bw.close();
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
     }
 
+    /**
+     *
+     * @param level
+     * @param message
+     */
     @Override
-    public void log(LogLevel level, String message) {
+    void log(LogLevel level, String message) {
         String logMessage = LocalDateTime.now() + " [" + level + "] " + message;
         if (!logQueue.offer(logMessage)) {
             System.err.println("Log queue is full");
         }
     }
 
-    private void logWriter() {
+    private void startWorker() {
         Thread worker = new Thread(() -> {
+
             while (true) {
                 try {
                     String logMessage = logQueue.take();
 
-                    rotateIfNeeded();
+                    rotateFileIfNeeded();
 
                     bw.write(logMessage);
                     bw.newLine();
-                    bw.flush(); // ✅ FIX
+                    bw.flush();
 
-                } catch (Exception e) {
-                    e.printStackTrace();
+                } catch (IOException | InterruptedException e) {
+                    System.err.println("Error writing log: " + e.getMessage());
                 }
             }
+
         });
 
-        // worker.setDaemon(true);
+        worker.setDaemon(true);
         worker.start();
     }
 
-    // 🔥 Hybrid rotation logic
-    private void rotateIfNeeded() throws IOException {
-        if (currentFile.length() < maxFileSize) return;
+    private void rotateFileIfNeeded() throws IOException {
+
+        File file = new File(filePath);
+
+        if (!file.exists() || file.length() < maxFileSize) return;
 
         bw.close();
-        createNewLogFile();
-        cleanupOldFiles();
-    }
 
-    private void createNewLogFile() {
-        try {
-            String timestamp = java.time.LocalDateTime.now()
-                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
 
-            String fileName = baseFileName + "-" + timestamp + ".log";
+        String rotatedName = filePath.replace(".log", "") + "-" + timestamp + ".log";
 
-            currentFile = new File(fileName);
-            bw = new BufferedWriter(new FileWriter(currentFile, true));
+        File rotatedFile = new File(rotatedName);
 
-        } catch (IOException e) {
-            e.printStackTrace();
+        if (!file.renameTo(rotatedFile)) {
+            throw new IOException("Failed to rotate log file");
         }
+
+        deleteOldLogs();
+
+        bw = new BufferedWriter(new FileWriter(filePath, true));
     }
-    // ✅ Delete oldest files if limit exceeded
-    private void cleanupOldFiles() {
+
+    private void deleteOldLogs() {
+
         File dir = new File(".");
-        File[] logFiles = dir.listFiles((d, name) ->
-                name.startsWith(baseFileName) && name.endsWith(".log")
+        String baseName = filePath.replace(".log", "");
+
+        File[] files = dir.listFiles((d, name) ->
+                name.startsWith(baseName + "-") && name.endsWith(".log")
         );
 
-        if (logFiles == null || logFiles.length <= maxBackups) return;
+        int maxBackupFiles = 5;
 
-        // Sort by last modified (oldest first)
-        Arrays.sort(logFiles, (f1, f2) ->
-                Long.compare(f1.lastModified(), f2.lastModified())
-        );
+        if (files == null || files.length <= maxBackupFiles) return;
 
-        int filesToDelete = logFiles.length - maxBackups;
+        Arrays.sort(files, Comparator.comparingLong(File::lastModified));
 
-        for (int i = 0; i < filesToDelete; i++) {
-            if (!logFiles[i].delete()) {
-                System.err.println("Failed to delete: " + logFiles[i].getName());
+        for (int i = 0; i < files.length - maxBackupFiles; i++) {
+            if (!files[i].delete()) {
+                System.err.println("Failed to delete old log file: " + files[i].getName());
             }
         }
     }
-}
 
+//    public void flushLogs() {
+//        try {
+//            while (!logQueue.isEmpty()) {
+//                String msg = logQueue.poll();
+//                if (msg != null) {
+//                    bw.write(msg);
+//                    bw.newLine();
+//                }
+//            }
+//            bw.flush();
+//        } catch (IOException e) {
+//            System.err.println("Flush failed: " + e.getMessage());
+//        }
+//    }
+}
 
 class ConsoleLogger extends Logger {
 
@@ -132,8 +169,15 @@ class LoggerFactory {
     private static final ConcurrentHashMap<String, Logger> loggers = new ConcurrentHashMap<>();
 
     public static Logger getFileLogger(String filePath) {
-        return loggers.computeIfAbsent(filePath,
-                path -> new FileLogger(path, 1024 * 1024, 10)); // 1MB, max 10 files
+        return loggers.computeIfAbsent(filePath, path -> {
+            try {
+                return new FileLogger(path, 1024 * 1024);
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to create FileLogger for: " + path, e);
+            }
+        });
     }
 
     public static Logger getConsoleLogger() {
@@ -199,5 +243,6 @@ public class CustomLogger {
 
         t1.start();
         t2.start();
+        //System.exit(0);
     }
 }

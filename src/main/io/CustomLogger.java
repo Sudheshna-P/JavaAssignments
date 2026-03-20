@@ -104,7 +104,7 @@ class FileLogger extends Logger {
 
         });
 
-        worker.setDaemon(false);
+        worker.setDaemon(true);
         worker.start();
     }
 

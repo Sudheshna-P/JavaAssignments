@@ -8,7 +8,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.time.format.DateTimeFormatter;
 
-import static java.lang.System.exit;
 
 enum LogLevel {
     INFO,
@@ -16,11 +15,22 @@ enum LogLevel {
     ERROR
 }
 
+/**
+ * Abstract class for logger implementation
+ * Subclasses must implement log(LogLevel, String) method
+ */
 abstract class Logger {
+    /**
+     * Logs the message at the severity level
+     * @param level the severity level
+     * @param message the log message to record
+     */
     abstract void log(LogLevel level, String message);
 }
 
-
+/**
+ * Logs messages to the file
+ */
 class FileLogger extends Logger {
 
     private final String filePath;
@@ -33,6 +43,7 @@ class FileLogger extends Logger {
      * Logs the messages in File
      * @param filePath - path of file
      * @param maxFileSize - maximum size of file
+     * @throws RuntimeException is the file cannot be opened or created
      */
     public FileLogger(String filePath, long maxFileSize) {
         this.filePath = filePath;
@@ -45,18 +56,21 @@ class FileLogger extends Logger {
         }
 
         startWorker();
-//        Runtime.getRuntime().addShutdownHook(new Thread(() -> {flushLogs();}));
-//        try {
-//            bw.close();
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            flushLogs();
+            try {
+                bw.close();
+            } catch (IOException e) {
+                System.err.println("Failed to close BufferedWriter: " + e.getMessage());
+            }
+        }));
     }
 
     /**
-     *
-     * @param level
-     * @param message
+     * Enqueues the log messages to be written to the file
+     * @param level the severity level of the message
+     * @param message the log message
      */
     @Override
     void log(LogLevel level, String message) {
@@ -66,6 +80,10 @@ class FileLogger extends Logger {
         }
     }
 
+    /**
+     * Starts the background worker thread that writes the entries into the file
+     * the thread is marked Daemon
+     */
     private void startWorker() {
         Thread worker = new Thread(() -> {
 
@@ -86,10 +104,15 @@ class FileLogger extends Logger {
 
         });
 
-        worker.setDaemon(true);
+        worker.setDaemon(false);
         worker.start();
     }
 
+    /**
+     * Checks whether the current log file exceeded the maxFileSize and,
+     * if so, it renames the file with timestamp and opens a new log file
+     * @throws IOException if the file cannot be opened or closed
+     */
     private void rotateFileIfNeeded() throws IOException {
 
         File file = new File(filePath);
@@ -99,7 +122,6 @@ class FileLogger extends Logger {
         bw.close();
 
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
-
         String rotatedName = filePath.replace(".log", "") + "-" + timestamp + ".log";
 
         File rotatedFile = new File(rotatedName);
@@ -113,6 +135,11 @@ class FileLogger extends Logger {
         bw = new BufferedWriter(new FileWriter(filePath, true));
     }
 
+    /**
+     * Deletes the oldest rotated log backup files when the number of backups
+     * exceeds the maximum allowed limit.
+     * the maximum number of backup files is 5
+     */
     private void deleteOldLogs() {
 
         File dir = new File(".");
@@ -134,25 +161,32 @@ class FileLogger extends Logger {
             }
         }
     }
-
-//    public void flushLogs() {
-//        try {
-//            while (!logQueue.isEmpty()) {
-//                String msg = logQueue.poll();
-//                if (msg != null) {
-//                    bw.write(msg);
-//                    bw.newLine();
-//                }
-//            }
-//            bw.flush();
-//        } catch (IOException e) {
-//            System.err.println("Flush failed: " + e.getMessage());
-//        }
-//    }
+    public void flushLogs() {
+        try {
+            while (!logQueue.isEmpty()) {
+                String msg = logQueue.poll();
+                if (msg != null) {
+                    bw.write(msg);
+                    bw.newLine();
+                }
+            }
+            bw.flush();
+        } catch (IOException e) {
+            System.err.println("Flush failed: " + e.getMessage());
+        }
+    }
 }
 
+/**
+ * Writes the log messages to the console
+ */
 class ConsoleLogger extends Logger {
 
+    /**
+     * Writes the log message to the console
+     * @param level the severity level
+     * @param message the log message to record
+     */
     @Override
     void log(LogLevel level, String message) {
         String logMessage = LocalDateTime.now() + " [" + level + "] " + message;
@@ -164,10 +198,21 @@ class ConsoleLogger extends Logger {
     }
 }
 
+/**
+ * Factory class for creating the Logger instance
+ */
 class LoggerFactory {
 
     private static final ConcurrentHashMap<String, Logger> loggers = new ConcurrentHashMap<>();
 
+    /**
+     * Returns a FileLogger for the give path
+     * if the specified path is already created, the cached instance is returned
+     * else a new FileLogger is created with default max file size of 1MB
+     * @param filePath the path of the log file
+     * @return a Logger that writes to the specific file
+     * @throws RuntimeException if the Logger cannot be initialized
+     */
     public static Logger getFileLogger(String filePath) {
         return loggers.computeIfAbsent(filePath, path -> {
             try {
@@ -180,15 +225,26 @@ class LoggerFactory {
         });
     }
 
+    /**
+     * Creates and returns a new Console Logger
+     * @return a new Logger that writes to the console
+     */
     public static Logger getConsoleLogger() {
         return new ConsoleLogger();
     }
 }
 
+/**
+ * Manages the collection of logger instances
+ */
 class LoggerManager {
 
     private final List<Logger> loggers;
 
+    /**
+     * Constructs a LoggerManager with the provided list of loggers
+     * @param loggers - loggers
+     */
     public LoggerManager(List<Logger> loggers) {
         this.loggers = loggers;
     }
@@ -204,21 +260,40 @@ class LoggerManager {
         }
     }
 
+    /**
+     * Logs a message in INFO level
+     * @param message the info message
+     */
     public void info(String message) {
         log(LogLevel.INFO, message);
     }
 
+    /**
+     * Logs a message at DEBUG level
+     * @param message the debug message
+     */
     public void debug(String message) {
         log(LogLevel.DEBUG, message);
     }
 
+    /**
+     * Logs a message at ERROR level
+     * @param message the error message
+     */
     public void error(String message) {
         log(LogLevel.ERROR, message);
     }
 }
 
+/**
+ * The CustomLogger
+ */
 public class CustomLogger {
 
+    /**
+     * Application entry point
+     * @param args command line argument
+     */
     public static void main(String[] args) {
 
         Logger fileLogger = LoggerFactory.getFileLogger("application.log");

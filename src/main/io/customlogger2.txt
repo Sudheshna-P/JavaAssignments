@@ -19,25 +19,25 @@ enum LogLevel {
  * Abstract class for logger implementation
  * Subclasses must implement log(LogLevel, String) method
  */
-interface Logger {
+abstract class Logger {
     /**
      * Logs the message at the severity level
      * @param level the severity level
      * @param message the log message to record
      */
-    void log(LogLevel level, String message) throws IOException;
+    abstract void log(LogLevel level, String message);
 }
 
 /**
  * Logs messages to the file
  */
-class FileLogger implements Logger {
+class FileLogger extends Logger {
 
     private final String filePath;
     private final long maxFileSize;
 
     private BufferedWriter bw;
-    private final BlockingQueue<String> logQueue = new LinkedBlockingQueue<>(10000);
+    private final BlockingQueue<String> logQueue = new LinkedBlockingQueue<>();
 
     /**
      * Logs the messages in File
@@ -58,18 +58,11 @@ class FileLogger implements Logger {
         startWorker();
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            running = false;
-            workerThread.interrupt();
-            try {
-                workerThread.join(); // wait for worker to fully stop
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            flushLogs();  // now safe, worker is completely done
+            flushLogs();
             try {
                 bw.close();
             } catch (IOException e) {
-                System.err.println("Failed to close BufferedWriter for file " + filePath + ": " + e.getMessage());
+                System.err.println("Failed to close BufferedWriter: " + e.getMessage());
             }
         }));
     }
@@ -80,10 +73,10 @@ class FileLogger implements Logger {
      * @param message the log message
      */
     @Override
-    public void log(LogLevel level, String message) {
+    void log(LogLevel level, String message) {
         String logMessage = LocalDateTime.now() + " [" + level + "] " + message;
         if (!logQueue.offer(logMessage)) {
-            System.err.println("Log queue is full, dropping message: " + logMessage);
+            System.err.println("Log queue is full");
         }
     }
 
@@ -91,31 +84,29 @@ class FileLogger implements Logger {
      * Starts the background worker thread that writes the entries into the file
      * the thread is marked Daemon
      */
-    private volatile boolean running = true;
-    private Thread workerThread; // keep reference to worker
-
     private void startWorker() {
-        workerThread = new Thread(() -> {
-            while (running || !logQueue.isEmpty()) {
+        Thread worker = new Thread(() -> {
+
+            while (true) {
                 try {
                     String logMessage = logQueue.take();
+
                     rotateFileIfNeeded();
+
                     bw.write(logMessage);
                     bw.newLine();
                     bw.flush();
-                } catch (IOException e) {
-                    System.err.println("Worker thread failed: " + e.getMessage());
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt(); // restore interrupt flag
-                    break; // exit loop cleanly
+
+                } catch (IOException | InterruptedException e) {
+                    System.err.println("Error writing log: " + e.getMessage());
                 }
             }
+
         });
-        workerThread.setDaemon(true);
-        workerThread.start();
+
+        worker.setDaemon(true);
+        worker.start();
     }
-
-
 
     /**
      * Checks whether the current log file exceeded the maxFileSize and,
@@ -130,13 +121,13 @@ class FileLogger implements Logger {
 
         bw.close();
 
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss.SSS"));
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
         String rotatedName = filePath.replace(".log", "") + "-" + timestamp + ".log";
 
         File rotatedFile = new File(rotatedName);
 
         if (!file.renameTo(rotatedFile)) {
-            throw new IOException("Failed to rotate log file from " + filePath + " to " + rotatedName);
+            throw new IOException("Failed to rotate log file");
         }
 
         deleteOldLogs();
@@ -150,26 +141,26 @@ class FileLogger implements Logger {
      * the maximum number of backup files is 5
      */
     private void deleteOldLogs() {
-        File dir = new File(filePath).getParentFile();
-        if (dir == null) dir = new File(".");
 
-        String baseName = new File(filePath).getName().replace(".log", "");
+        File dir = new File(".");
+        String baseName = filePath.replace(".log", "");
 
         File[] files = dir.listFiles((d, name) ->
-                name.startsWith(baseName + "-") && name.endsWith(".log"));
+                name.startsWith(baseName + "-") && name.endsWith(".log")
+        );
 
         int maxBackupFiles = 5;
+
         if (files == null || files.length <= maxBackupFiles) return;
 
         Arrays.sort(files, Comparator.comparingLong(File::lastModified));
 
         for (int i = 0; i < files.length - maxBackupFiles; i++) {
             if (!files[i].delete()) {
-                System.err.println("Failed to delete old log file: " + files[i].getAbsolutePath());
+                System.err.println("Failed to delete old log file: " + files[i].getName());
             }
         }
     }
-
     public void flushLogs() {
         try {
             while (!logQueue.isEmpty()) {
@@ -189,7 +180,7 @@ class FileLogger implements Logger {
 /**
  * Writes the log messages to the console
  */
-class ConsoleLogger implements Logger {
+class ConsoleLogger extends Logger {
 
     /**
      * Writes the log message to the console
@@ -197,7 +188,7 @@ class ConsoleLogger implements Logger {
      * @param message the log message to record
      */
     @Override
-    public void log(LogLevel level, String message) {
+    void log(LogLevel level, String message) {
         String logMessage = LocalDateTime.now() + " [" + level + "] " + message;
         try {
             System.out.println(logMessage);
@@ -206,6 +197,7 @@ class ConsoleLogger implements Logger {
         }
     }
 }
+
 /**
  * Factory class for creating the Logger instance
  */

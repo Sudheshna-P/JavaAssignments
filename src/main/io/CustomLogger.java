@@ -199,11 +199,7 @@ class ConsoleLogger implements Logger {
     @Override
     public void log(LogLevel level, String message) {
         String logMessage = LocalDateTime.now() + " [" + level + "] " + message;
-        try {
-            System.out.println(logMessage);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        System.out.println(logMessage);
     }
 }
 /**
@@ -262,12 +258,10 @@ class LoggerManager {
             try {
                 logger.log(level, msg);
             } catch (Exception e) {
-                System.err.println("Logger failed "+ e.getMessage());
-                e.printStackTrace();
+                System.err.println("Logger failed " + e.getMessage());
             }
         }
     }
-
     /**
      * Logs a message in INFO level
      * @param message the info message

@@ -67,6 +67,7 @@ class FileLogger implements Logger {
             } catch (Exception e) {
                 System.err.println("Shutdown failed: " + e.getMessage());
             }
+
         }));
     }
 
@@ -136,8 +137,6 @@ class FileLogger implements Logger {
         }
     }
 
-
-
     /**
      * Checks whether the current log file exceeded the maxFileSize and,
      * if so, it renames the file with timestamp and opens a new log file
@@ -171,12 +170,13 @@ class FileLogger implements Logger {
      * the maximum number of backup files is 5
      */
     private void deleteOldLogs() {
-        File dir = new File(filePath).getParentFile();
-        if (dir == null) dir = new File(".");
+        File parentDir = new File(filePath).getParentFile();
+
+        if (parentDir == null) parentDir = new File(".");
 
         String baseName = new File(filePath).getName().replace(".log", "");
 
-        File[] files = dir.listFiles((d, name) ->
+        File[] files = parentDir.listFiles((dir, name) ->
                 name.startsWith(baseName + "-") && name.endsWith(".log"));
 
         int maxBackupFiles = 5;

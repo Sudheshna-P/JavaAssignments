@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.TimeUnit;
 
 
 enum LogLevel {
@@ -57,19 +58,14 @@ class FileLogger implements Logger {
 
         startWorker();
 
+        // Shutdown hook — ONLY signal and wait
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            running = false;
-            workerThread.interrupt();
             try {
-                workerThread.join(); // wait for worker to fully stop
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            flushLogs();  // now safe, worker is completely done
-            try {
-                bw.close();
-            } catch (IOException e) {
-                System.err.println("Failed to close BufferedWriter for file " + filePath + ": " + e.getMessage());
+                running = false;
+                workerThread.interrupt();
+                //workerThread.join(5000);
+            } catch (Exception e) {
+                System.err.println("Shutdown failed: " + e.getMessage());
             }
         }));
     }
@@ -82,8 +78,13 @@ class FileLogger implements Logger {
     @Override
     public void log(LogLevel level, String message) {
         String logMessage = LocalDateTime.now() + " [" + level + "] " + message;
-        if (!logQueue.offer(logMessage)) {
-            System.err.println("Log queue is full, dropping message: " + logMessage);
+
+        try {
+            if (!logQueue.offer(logMessage)) {
+                System.err.println("Log queue full, dropping message: " + logMessage);
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to enqueue log: " + e.getMessage());
         }
     }
 
@@ -96,23 +97,43 @@ class FileLogger implements Logger {
 
     private void startWorker() {
         workerThread = new Thread(() -> {
-            while (running || !logQueue.isEmpty()) {
-                try {
-                    String logMessage = logQueue.take();
+            try {
+                while (running || !logQueue.isEmpty()) {
+                    String logMessage = logQueue.poll(100, TimeUnit.MILLISECONDS);
+                    if (logMessage == null) continue;
                     rotateFileIfNeeded();
                     bw.write(logMessage);
                     bw.newLine();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (IOException e) {
+                System.err.println("Worker thread failed: " + e.getMessage());
+            } finally {
+                drainQueue();
+
+                try {
                     bw.flush();
+                    bw.close();
                 } catch (IOException e) {
-                    System.err.println("Worker thread failed: " + e.getMessage());
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt(); // restore interrupt flag
-                    break; // exit loop cleanly
+                    System.err.println("Final flush failed: " + e.getMessage());
                 }
             }
         });
-        workerThread.setDaemon(true);
+        //workerThread.setDaemon(true);
         workerThread.start();
+    }
+
+    private void drainQueue() {
+        try {
+            String msg;
+            while ((msg = logQueue.poll()) != null) {
+                bw.write(msg);
+                bw.newLine();
+            }
+        } catch (IOException e) {
+            System.err.println("Drain failed: " + e.getMessage());
+        }
     }
 
 
@@ -170,20 +191,20 @@ class FileLogger implements Logger {
         }
     }
 
-    public void flushLogs() {
-        try {
-            while (!logQueue.isEmpty()) {
-                String msg = logQueue.poll();
-                if (msg != null) {
-                    bw.write(msg);
-                    bw.newLine();
-                }
-            }
-            bw.flush();
-        } catch (IOException e) {
-            System.err.println("Flush failed: " + e.getMessage());
-        }
-    }
+//    public void flushLogs() {
+//        try {
+//            while (!logQueue.isEmpty()) {
+//                String msg = logQueue.poll();
+//                if (msg != null) {
+//                    bw.write(msg);
+//                    bw.newLine();
+//                }
+//            }
+//            bw.flush();
+//        } catch (IOException e) {
+//            System.err.println("Flush failed: " + e.getMessage());
+//        }
+//    }
 }
 
 /**

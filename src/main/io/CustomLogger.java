@@ -9,7 +9,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.TimeUnit;
 
-
 enum LogLevel {
     INFO,
     DEBUG,
@@ -40,6 +39,9 @@ class FileLogger implements Logger {
     private BufferedWriter bw;
     private final BlockingQueue<String> logQueue = new LinkedBlockingQueue<>(10000);
 
+    private volatile boolean running = true;
+    private Thread workerThread; // keep reference to worker
+
     /**
      * Logs the messages in File
      * @param filePath - path of file
@@ -63,7 +65,7 @@ class FileLogger implements Logger {
             try {
                 running = false;
                 workerThread.interrupt();
-                //workerThread.join(5000);
+                workerThread.join(5000);
             } catch (Exception e) {
                 System.err.println("Shutdown failed: " + e.getMessage());
             }
@@ -93,8 +95,7 @@ class FileLogger implements Logger {
      * Starts the background worker thread that writes the entries into the file
      * the thread is marked Daemon
      */
-    private volatile boolean running = true;
-    private Thread workerThread; // keep reference to worker
+
 
     private void startWorker() {
         workerThread = new Thread(() -> {
@@ -121,7 +122,7 @@ class FileLogger implements Logger {
                 }
             }
         });
-        //workerThread.setDaemon(true);
+        workerThread.setDaemon(true);
         workerThread.start();
     }
 
@@ -166,8 +167,9 @@ class FileLogger implements Logger {
 
     /**
      * Deletes the oldest rotated log backup files when the number of backups
-     * exceeds the maximum allowed limit.
-     * the maximum number of backup files is 5
+     *      * exceeds the maximum allowed limit.
+     *      * the maximum number of backup files is 5
+     *      * @see FileLogger
      */
     private void deleteOldLogs() {
         File parentDir = new File(filePath).getParentFile();
@@ -206,6 +208,7 @@ class FileLogger implements Logger {
 //        }
 //    }
 }
+
 
 /**
  * Writes the log messages to the console

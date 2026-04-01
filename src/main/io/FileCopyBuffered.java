@@ -1,6 +1,10 @@
 import java.io.*;
 import java.util.List;
 
+import logger.Logger;
+import logger.LoggerManager;
+import logger.LoggerFactory;
+
 /**
  * FileCopyBuffered copies the contents of one file to another
  * using BufferedInputStream and BufferedOutputStream.

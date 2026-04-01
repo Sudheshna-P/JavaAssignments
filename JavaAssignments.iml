@@ -8,6 +8,9 @@
       <sourceFolder url="file://$MODULE_DIR$/src/test/ds_test" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/src/test/io_test" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/src/main/net" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/main" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/main/server" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/server" isTestSource="false" />
     </content>
     <orderEntry type="jdk" jdkName="17" jdkType="JavaSDK" />
     <orderEntry type="sourceFolder" forTests="false" />

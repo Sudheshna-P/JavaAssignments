@@ -1,0 +1,313 @@
+import java.io.*;
+import java.nio.*;
+import java.nio.channels.*;
+import java.nio.file.*;
+import java.util.List;
+
+import logger.Logger;
+import logger.LoggerManager;
+import logger.LoggerFactory;
+
+public class SimpleHttpServer extends ServerNIO {
+
+    private static final int PORT = 8080;
+    private static final String BASE = "/home/sudheshna/IdeaProjects/JavaAssignments/src";
+
+    private static final Logger fileLogger = LoggerFactory.getFileLogger(
+            "/home/sudheshna/IdeaProjects/JavaAssignments/src/main/ioOutput/server.log");
+    private static final Logger consoleLogger = LoggerFactory.getConsoleLogger();
+    private static final LoggerManager logger = new LoggerManager(List.of(fileLogger, consoleLogger));
+
+    public SimpleHttpServer() {
+        super(PORT);
+    }
+
+    @Override
+    protected void handleRead(SelectionKey key) throws IOException {
+        SocketChannel client = (SocketChannel) key.channel();
+        ByteBuffer buffer = ByteBuffer.allocate(8192);
+        int bytesRead = client.read(buffer);
+
+        if (bytesRead == -1) {
+            client.close();
+            return;
+        }
+
+        buffer.flip();
+        StringBuilder requestBuilder = (StringBuilder) key.attachment();
+        requestBuilder.append(new String(buffer.array(), 0, buffer.limit()));
+
+        // wait until full HTTP request is received
+        String request = requestBuilder.toString();
+        if (!request.contains("\r\n\r\n")) return;
+
+        String requestLine = request.lines().findFirst().orElse("");
+        if (requestLine.isEmpty()) {
+            logger.debug("Empty request received");
+            client.close();
+            return;
+        }
+
+        logger.info("Request: " + requestLine);
+
+        String[] parts = requestLine.split(" ");
+        String method = parts[0];
+        String path   = parts[1];
+
+        if (!method.equals("GET")) {
+            logger.info("Method not allowed: " + method + " " + path);
+            client.write(ByteBuffer.wrap(build405().getBytes()));
+            client.close();
+            return;
+        }
+
+        if (path.equals("/")) path = "/index.html";
+
+        String folder = "Public", prefix = "";
+        if      (path.startsWith("/images")) { folder = "images";    prefix = "/images"; }
+        else if (path.startsWith("/files"))  { folder = "documents"; prefix = "/files";  }
+
+        String relativePath = prefix.isEmpty() ? path : path.substring(prefix.length());
+        if (relativePath.isEmpty() || relativePath.equals("/")) {
+            client.write(ByteBuffer.wrap(build404().getBytes()));
+            client.close();
+            return;
+        }
+
+        Path filePath = Paths.get(BASE, folder, relativePath.substring(1));
+
+        if (!Files.exists(filePath) || Files.isDirectory(filePath)) {
+            logger.info("File not found: " + filePath.toAbsolutePath());
+            client.write(ByteBuffer.wrap(build404().getBytes()));
+            client.close();
+            return;
+        }
+
+        long fileSize = Files.size(filePath);
+        String contentType = getContentType(path);
+        logger.debug("Serving: " + filePath + " size=" + fileSize + " type=" + contentType);
+
+        client.write(ByteBuffer.wrap(buildHeader(fileSize, contentType).getBytes()));
+
+        try (FileChannel fileChannel = FileChannel.open(filePath)) {
+            fileChannel.transferTo(0, fileSize, client);
+        }
+
+        client.close();
+        logger.info("Served: " + path + " (" + fileSize + " bytes)");
+    }
+
+    private String buildHeader(long length, String type) {
+        return "HTTP/1.1 200 OK\r\n"
+                + "Content-Type: "   + type   + "\r\n"
+                + "Content-Length: " + length + "\r\n"
+                + "Connection: close\r\n\r\n";
+    }
+
+    private String build404() {
+        String body = "<h1>404 Not Found</h1>";
+        return "HTTP/1.1 404 Not Found\r\n"
+                + "Content-Type: text/html\r\n"
+                + "Content-Length: " + body.length() + "\r\n\r\n" + body;
+    }
+
+    private String build405() {
+        String body = "<h1>405 Method Not Allowed</h1>";
+        return "HTTP/1.1 405 Method Not Allowed\r\n"
+                + "Content-Type: text/html\r\n"
+                + "Content-Length: " + body.length() + "\r\n\r\n" + body;
+    }
+
+    private String getContentType(String path) {
+        if (path.endsWith(".html")) return "text/html";
+        if (path.endsWith(".css"))  return "text/css";
+        if (path.endsWith(".js"))   return "application/javascript";
+        if (path.endsWith(".png"))  return "image/png";
+        if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+        if (path.endsWith(".gif"))  return "image/gif";
+        if (path.endsWith(".txt"))  return "text/plain";
+        return "application/octet-stream";
+    }
+
+    public static void main(String[] args) {
+        logger.info("Starting HTTP server on port " + PORT);
+        new SimpleHttpServer().start();
+    }
+}
+
+import java.io.*;
+import java.net.*;
+import java.nio.file.*;
+import java.util.List;
+import java.util.concurrent.*;
+
+import logger.Logger;
+import logger.LoggerManager;
+import logger.LoggerFactory;
+
+public class SimpleHttpServer {
+
+    private static final int PORT = 8080;
+    private static final int THREADS = 10;
+
+    private static final Logger fileLogger = LoggerFactory.getFileLogger(
+            "/home/sudheshna/IdeaProjects/JavaAssignments/src/main/ioOutput/server.log");
+    private static final Logger consoleLogger = LoggerFactory.getConsoleLogger();
+    private static final LoggerManager logger = new LoggerManager(List.of(fileLogger, consoleLogger));
+    private static final String BASE = "/home/sudheshna/IdeaProjects/JavaAssignments/src";
+
+    private static void handleClient(Socket client) {
+        try (BufferedReader in = new BufferedReader(new InputStreamReader(client.getInputStream()));
+             OutputStream out = client.getOutputStream()) {
+            try {
+                String requestLine = in.readLine();
+                String line;
+                while ((line = in.readLine()) != null && !line.isEmpty()) {
+                    // skip headers
+                }
+
+                if (requestLine == null || requestLine.isEmpty()) {
+                    logger.debug("Empty request received");
+                    return;
+                }
+
+                logger.info("Request: " + requestLine);
+
+                String[] parts = requestLine.split(" ");
+                String method = parts[0];
+                String path = parts[1];
+
+                if (!method.equals("GET")) {
+                    logger.info("Method not allowed: " + method + " " + path);
+                    send405(out);
+                    return;
+                }
+
+                if (path.equals("/")) {
+                    path = "/index.html";
+                }
+
+                Path filePath;
+                String folder = "Public";
+                String prefix = "";
+
+                if (path.startsWith("/images")) {
+                    folder = "images";
+                    prefix = "/images";
+                }
+                else if (path.startsWith("/files")) {
+                    folder = "documents";
+                    prefix = "/files";
+                }
+
+                String relativePath;
+
+                if (prefix.isEmpty()) {
+                    relativePath = path;
+                } else {
+                    relativePath = path.substring(prefix.length());
+
+                    if (relativePath.isEmpty() || relativePath.equals("/")) {
+                        send404(out);
+                        return;
+                    }
+                }
+
+                filePath = Paths.get(BASE, folder, relativePath.substring(1));
+
+                if (!Files.exists(filePath) || Files.isDirectory(filePath)) {
+                    logger.info("File not found: " + filePath.toAbsolutePath());
+                    send404(out);
+                    return;
+                }
+
+                long fileSize = Files.size(filePath);
+                String contentType = getContentType(path);
+
+                logger.debug("Serving file: " + filePath.toAbsolutePath()
+                        + " size=" + fileSize + " type=" + contentType);
+
+                sendHeader(out, fileSize, contentType);
+
+                try (InputStream fileIn = Files.newInputStream(filePath)) {
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+
+                    while ((bytesRead = fileIn.read(buffer)) != -1) {
+                        out.write(buffer, 0, bytesRead);
+                    }
+                }
+
+                out.flush();
+                logger.info("Served: " + path + " (" + fileSize + " bytes)");
+
+            } catch (Exception e) {
+                logger.error("Error handling request: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            logger.error("Failed to open client streams: " + e.getMessage());
+        }
+    }
+
+    private static void sendHeader(OutputStream out, long length, String type) throws IOException {
+        String header =
+                "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: " + type + "\r\n" +
+                        "Content-Length: " + length + "\r\n" +
+                        "Connection: close\r\n" +
+                        "\r\n";
+        out.write(header.getBytes());
+    }
+
+    private static void send404(OutputStream out) throws IOException {
+        String body = "<h1>404 Not Found</h1>";
+        String response =
+                "HTTP/1.1 404 Not Found\r\n" +
+                        "Content-Type: text/html\r\n" +
+                        "Content-Length: " + body.length() + "\r\n" +
+                        "\r\n" +
+                        body;
+        out.write(response.getBytes());
+    }
+
+    private static void send405(OutputStream out) throws IOException {
+        String body = "<h1>405 Method Not Allowed</h1>";
+        String response =
+                "HTTP/1.1 405 Method Not Allowed\r\n" +
+                        "Content-Type: text/html\r\n" +
+                        "Content-Length: " + body.length() + "\r\n" +
+                        "\r\n" +
+                        body;
+        out.write(response.getBytes());
+    }
+
+    private static String getContentType(String path) {
+        if (path.endsWith(".html")) return "text/html";
+        if (path.endsWith(".css"))  return "text/css";
+        if (path.endsWith(".js"))   return "application/javascript";
+        if (path.endsWith(".png"))  return "image/png";
+        if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+        if (path.endsWith(".gif"))  return "image/gif";
+        if (path.endsWith(".txt"))  return "text/plain";
+        return "application/octet-stream";
+    }
+
+    public static void main(String[] args) throws Exception {
+
+        logger.info("Starting server on port " + PORT + " with " + THREADS + " threads");
+
+        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+            ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+            logger.info("Server running on port " + PORT);
+
+            while (true) {
+                Socket client = serverSocket.accept();
+                logger.debug("Accepted connection from: " + client.getInetAddress());
+                pool.submit(() -> handleClient(client));
+            }
+        } catch (Exception e) {
+            logger.error("Server failed to start: " + e.getMessage());
+            throw e;
+        }
+    }
+}

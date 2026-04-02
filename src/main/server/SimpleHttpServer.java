@@ -43,7 +43,6 @@ public class SimpleHttpServer {
         }
 
         logger.info("Request: " + requestLine);
-
         String[] parts = requestLine.split(" ");
         String method = parts[0];
         String path   = parts[1];
@@ -58,7 +57,7 @@ public class SimpleHttpServer {
         if (path.equals("/")) path = "/index.html";
 
         String folder = "Public", prefix = "";
-        if      (path.startsWith("/images")) { folder = "images";    prefix = "/images"; }
+        if (path.startsWith("/images")) { folder = "images"; prefix = "/images"; }
         else if (path.startsWith("/files"))  { folder = "documents"; prefix = "/files";  }
 
         String relativePath = prefix.isEmpty() ? path : path.substring(prefix.length());
@@ -125,6 +124,6 @@ public class SimpleHttpServer {
 
     public static void main(String[] args) {
         logger.info("Starting HTTP server on port " + PORT);
-        new ServerNIO(PORT, SimpleHttpServer::handleClient).start(); // just like passing loggers in
+        new ServerNIO(PORT, SimpleHttpServer::handleClient).start();
     }
 }

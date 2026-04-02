@@ -51,7 +51,7 @@ public class ServerNIO {
                     SelectionKey key = keys.next();
                     keys.remove();
                     if (key.isAcceptable()) handleAccept(serverChannel, selector);
-                    if (key.isReadable())   handler.handle(key);  // delegates to whatever was passed in
+                    if (key.isReadable())   handler.handle(key);
                 }
             }
         } catch (IOException e) {

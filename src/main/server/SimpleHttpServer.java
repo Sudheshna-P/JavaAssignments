@@ -13,16 +13,21 @@ public class SimpleHttpServer {
     private static final int PORT = 8080;
     private static final String BASE = "/home/sudheshna/IdeaProjects/JavaAssignments/src";
 
-    private static final Logger fileLogger = LoggerFactory.getFileLogger(
-            "/home/sudheshna/IdeaProjects/JavaAssignments/src/main/ioOutput/server.log");
-    private static final Logger consoleLogger = LoggerFactory.getConsoleLogger();
-    private static final LoggerManager logger = new LoggerManager(List.of(fileLogger, consoleLogger));
+    private final Logger fileLogger;
+    private final Logger consoleLogger;
+    private final LoggerManager logger;
 
-    private static void handleClient(SelectionKey key) throws IOException {
+    public SimpleHttpServer() {
+        this.fileLogger = LoggerFactory.getFileLogger(
+                "/home/sudheshna/IdeaProjects/JavaAssignments/src/main/ioOutput/server.log");
+        this.consoleLogger = LoggerFactory.getConsoleLogger();
+        this.logger = new LoggerManager(List.of(fileLogger, consoleLogger));
+    }
+
+    private void handleClient(SelectionKey key) throws IOException {
         SocketChannel client = (SocketChannel) key.channel();
         ByteBuffer buffer = ByteBuffer.allocate(8192);
         int bytesRead = client.read(buffer);
-
         if (bytesRead == -1) {
             client.close();
             return;
@@ -123,7 +128,9 @@ public class SimpleHttpServer {
     }
 
     public static void main(String[] args) {
-        logger.info("Starting HTTP server on port " + PORT);
-        new ServerNIO(PORT, SimpleHttpServer::handleClient).start();
+        SimpleHttpServer server = new SimpleHttpServer();
+        server.logger.info("Starting HTTP server on port " + PORT);
+
+        new ServerNIO(PORT, server::handleClient).start();
     }
 }

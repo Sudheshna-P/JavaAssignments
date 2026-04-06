@@ -62,7 +62,7 @@ public class ServerNIO {
     private void handleAccept(ServerSocketChannel serverChannel, Selector selector) throws IOException {
         SocketChannel client = serverChannel.accept();
         client.configureBlocking(false);
-        client.register(selector, SelectionKey.OP_READ, new StringBuilder());
+        client.register(selector, SelectionKey.OP_READ, new ByteArrayOutputStream());
         System.out.println("Client connected: " + client.getRemoteAddress());
     }
 

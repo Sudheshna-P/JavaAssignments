@@ -11,7 +11,6 @@ import java.util.*;
 import logger.Logger;
 import logger.LoggerManager;
 import logger.LoggerFactory;
-
 public class SimpleHttpServer {
 
     private static final int PORT = 8080;
@@ -42,10 +41,10 @@ public class SimpleHttpServer {
         buffer.flip();
 
         ByteArrayOutputStream acc = (ByteArrayOutputStream) key.attachment();
-//        if (acc == null) {
-//            acc = new ByteArrayOutputStream();
-//            key.attach(acc);
-//        }
+        if (acc == null) {
+            acc = new ByteArrayOutputStream();
+            key.attach(acc);
+        }
 
         acc.write(buffer.array(), 0, buffer.limit());
         byte[] data = acc.toByteArray();
@@ -80,7 +79,48 @@ public class SimpleHttpServer {
             String connectionHeader = extractHeader(headers, "Connection");
             boolean keepAlive = connectionHeader == null || !connectionHeader.equalsIgnoreCase("close");
 
-            if (!method.equals("GET")) {
+            if (method.equals("POST")) {
+
+                String contentLengthHeader = extractHeader(headers, "Content-Length");
+                int contentLength = contentLengthHeader != null
+                        ? Integer.parseInt(contentLengthHeader.trim())
+                        : 0;
+
+                if (data.length < end + contentLength) {
+                    break;
+                }
+
+                String body = new String(
+                        data,
+                        end,
+                        contentLength,
+                        StandardCharsets.UTF_8
+                );
+
+                logger.info("POST Body: " + body);
+
+                // Simple response
+                String responseBody = "<h1>POST Received</h1>";
+
+                String response =
+                        "HTTP/1.1 200 OK\r\n" +
+                                "Date: " + HTTP_DATE.format(ZonedDateTime.now()) + "\r\n" +
+                                "Content-Type: text/html\r\n" +
+                                "Content-Length: " + responseBody.length() + "\r\n" +
+                                "Connection: " + (keepAlive ? "keep-alive" : "close") + "\r\n\r\n" +
+                                responseBody;
+
+                client.write(ByteBuffer.wrap(response.getBytes()));
+
+                if (!keepAlive) {
+                    client.close();
+                    return;
+                }
+
+                processed = end + contentLength;
+                continue;
+            }
+            else if (!method.equals("GET")) {
                 client.write(ByteBuffer.wrap(send405().getBytes()));
                 if (!keepAlive) client.close();
                 processed = end;

@@ -377,53 +377,10 @@ public class SimpleHttpServer {
         }
     }
 
-    private void handlePlaylist(SocketChannel client, SelectionKey key, boolean keepAlive) {
-        try {
-            List<String> entries = new ArrayList<>();
-            try (DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(UPLOADS))) {
-                for (Path p : stream) {
-                    if (Files.isDirectory(p)) continue;
-                    String name = p.getFileName().toString();
-                    // skip temp files still being written
-                    if (name.endsWith(".tmp")) continue;
-
-                    String lower = name.toLowerCase(Locale.ROOT);
-                    String type;
-                    if (lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".ogg")
-                            || lower.endsWith(".mov") || lower.endsWith(".avi")) {
-                        type = "video";
-                    } else {
-                        type = "image";
-                    }
-                    // build JSON object per file
-                    entries.add("{\"name\":\"" + name.replace("\"", "\\\"")
-                            + "\",\"type\":\"" + type + "\"}");
-                }
-            }
-            String body = "[" + String.join(",", entries) + "]";
-            String response = "HTTP/1.1 200 OK\r\n" +
-                    "Date: " + HTTP_DATE.format(ZonedDateTime.now()) + "\r\n" +
-                    "Content-Type: application/json\r\n" +
-                    "Content-Length: " + body.getBytes(StandardCharsets.UTF_8).length + "\r\n" +
-                    "Connection: " + (keepAlive ? "keep-alive" : "close") + "\r\n\r\n" +
-                    body;
-            sendAndMaybeClose(client, key,
-                    response.getBytes(StandardCharsets.UTF_8), keepAlive);
-        } catch (IOException e) {
-            logger.info("Playlist error: " + e.getMessage());
-            sendAndMaybeClose(client, key, send404().getBytes(), keepAlive);
-        }
-    }
-
     private int handleGet(SocketChannel client, SelectionKey key, String path,
                           String headers, boolean keepAlive, int end) throws IOException {
 
         if (path.equals("/")) path = "/index.html";
-        // At the top of handleGet, before resolvePath:
-        if (path.equals("/playlist")) {
-            handlePlaylist(client, key, keepAlive);
-            return end;
-        }
 
         Path filePath = resolvePath(path);
         if (filePath == null) {
@@ -665,3 +622,88 @@ public class SimpleHttpServer {
         new ServerNIO(PORT, server::handleClient).start();
     }
 }
+// index.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Server</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+        h2 { border-bottom: 1px solid #ccc; padding-bottom: 6px; }
+        input, button { margin: 6px 0; padding: 6px 10px; }
+        button { cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+        #uploadStatus { margin-top: 10px; font-size: 14px; color: green; }
+        #uploadStatus.error { color: red; }
+    </style>
+</head>
+<body>
+
+<h1>My HTTP Server</h1>
+
+<!-- ── View files ── -->
+<h2>View Files</h2>
+<p><a href="/images/img.jpg" target="_blank">Large Image</a></p>
+<p><a href="/images/download.jpeg" target="_blank">Small Image</a></p>
+
+<!-- ── Login form ── -->
+<h2>Login</h2>
+<form method="POST" action="/submit">
+    <input name="username" placeholder="Username" /><br/>
+    <input name="password" type="password" placeholder="Password" /><br/>
+    <button type="submit">Send</button>
+</form>
+
+<!-- ── File upload ── -->
+<h2>Upload Image / Video</h2>
+<form id="uploadForm">
+    <input type="file" id="fileInput" accept="image/*,video/*" multiple /><br/>
+    <button type="button" onclick="uploadFiles()">Upload</button>
+</form>
+<div id="uploadStatus"></div>
+
+<script>
+    async function uploadFiles() {
+        const input  = document.getElementById('fileInput');
+        const status = document.getElementById('uploadStatus');
+
+        if (input.files.length === 0) {
+            status.className = 'error';
+            status.textContent = 'Please select at least one file.';
+            return;
+        }
+
+        const formData = new FormData();
+        for (const file of input.files) {
+            formData.append('file', file);
+        }
+
+        status.className = '';
+        status.textContent = 'Uploading...';
+
+        try {
+            const response = await fetch('/', {
+                method: 'POST',
+                body: formData   // browser sets Content-Type + boundary automatically
+            });
+
+            const result = await response.json();
+
+            if (result.errors.length === 0) {
+                status.className = '';
+                status.textContent = 'Uploaded: ' + result.uploaded.join(', ');
+            } else {
+                status.className = 'error';
+                status.textContent =
+                    (result.uploaded.length ? 'Saved: ' + result.uploaded.join(', ') + '. ' : '') +
+                    'Errors: ' + result.errors.join(', ');
+            }
+        } catch (err) {
+            status.className = 'error';
+            status.textContent = 'Upload failed: ' + err.message;
+        }
+    }
+</script>
+
+</body>
+</html>

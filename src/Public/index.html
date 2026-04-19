@@ -3,67 +3,153 @@
 <head>
     <title>My Server</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
         h2 { border-bottom: 1px solid #ccc; padding-bottom: 6px; }
         input, button { margin: 6px 0; padding: 6px 10px; }
         button { cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
         button:hover { background: #0056b3; }
         #uploadStatus { margin-top: 10px; font-size: 14px; color: green; }
         #uploadStatus.error { color: red; }
+
+        /* Playlist */
+        #playlist { list-style: none; padding: 0; margin: 0; }
+        #playlist li {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 10px; border-bottom: 1px solid #eee;
+            cursor: pointer; border-radius: 4px;
+        }
+        #playlist li:hover { background: #f0f4ff; }
+        #playlist li.active { background: #dce8ff; font-weight: bold; }
+        .file-icon { font-size: 20px; }
+        .file-name { flex: 1; font-size: 14px; word-break: break-all; }
+        .file-type { font-size: 11px; color: #888; }
+
+        /* Preview */
+        #previewBox {
+            margin-top: 20px; text-align: center;
+            background: #111; border-radius: 8px;
+            min-height: 200px; display: flex;
+            align-items: center; justify-content: center;
+        }
+        #previewBox img  { max-width: 100%; max-height: 500px; border-radius: 8px; }
+        #previewBox video { max-width: 100%; max-height: 500px; border-radius: 8px; }
+        #previewBox .empty { color: #555; font-size: 14px; }
+
+        .playlist-controls { display: flex; gap: 8px; margin-bottom: 10px; }
+        #nowPlaying { font-size: 13px; color: #555; margin-top: 6px; min-height: 18px; }
     </style>
 </head>
 <body>
-
 <h1>My HTTP Server</h1>
 
-<!-- ── View files ── -->
-<h2>View Files</h2>
-<p><a href="/images/img.jpg" target="_blank">Large Image</a></p>
-<p><a href="/images/download.jpeg" target="_blank">Small Image</a></p>
-
-<!-- ── Login form ── -->
-<h2>Login</h2>
-<form method="POST" action="/submit">
-    <input name="username" placeholder="Username" /><br/>
-    <input name="password" type="password" placeholder="Password" /><br/>
-    <button type="submit">Send</button>
-</form>
-
-<!-- ── File upload ── -->
+<!-- Upload -->
 <h2>Upload Image / Video</h2>
-<form id="uploadForm">
-    <input type="file" id="fileInput" accept="image/*,video/*" multiple /><br/>
-    <button type="button" onclick="uploadFiles()">Upload</button>
-</form>
+<input type="file" id="fileInput" accept="image/*,video/*" multiple /><br/>
+<button onclick="uploadFiles()">Upload</button>
 <div id="uploadStatus"></div>
 
+<!-- Playlist -->
+<h2>Playlist</h2>
+<div class="playlist-controls">
+    <button onclick="playPrev()">⏮ Prev</button>
+    <button onclick="playNext()">Next ⏭</button>
+    <button onclick="loadPlaylist()">↻ Refresh</button>
+</div>
+<div id="nowPlaying"></div>
+<ul id="playlist"><li style="color:#aaa;padding:8px">No files yet.</li></ul>
+
+<!-- Preview -->
+<h2>Preview</h2>
+<div id="previewBox"><span class="empty">Select a file from the playlist</span></div>
+
 <script>
+    let files = [];       // [{name, type}]
+    let currentIdx = -1;
+
+    /* ── Playlist ─────────────────────────────────────────── */
+    async function loadPlaylist() {
+        try {
+            const res = await fetch('/playlist');
+            files = await res.json();   // [{name:"foo.mp4", type:"video"}, ...]
+            renderPlaylist();
+        } catch(e) {
+            document.getElementById('playlist').innerHTML =
+                '<li style="color:red">Failed to load playlist</li>';
+        }
+    }
+
+    function renderPlaylist() {
+        const ul = document.getElementById('playlist');
+        if (files.length === 0) {
+            ul.innerHTML = '<li style="color:#aaa;padding:8px">No files yet.</li>';
+            return;
+        }
+        ul.innerHTML = files.map((f, i) => `
+            <li id="pl-${i}" onclick="selectFile(${i})">
+                <span class="file-icon">${f.type === 'video' ? '🎬' : '🖼️'}</span>
+                <span class="file-name">${f.name}</span>
+                <span class="file-type">${f.type}</span>
+            </li>
+        `).join('');
+        if (currentIdx >= 0) highlightActive(currentIdx);
+    }
+
+    function selectFile(idx) {
+        currentIdx = idx;
+        highlightActive(idx);
+        previewFile(files[idx]);
+        document.getElementById('nowPlaying').textContent = '▶ ' + files[idx].name;
+    }
+
+    function highlightActive(idx) {
+        document.querySelectorAll('#playlist li').forEach(li => li.classList.remove('active'));
+        const el = document.getElementById('pl-' + idx);
+        if (el) { el.classList.add('active'); el.scrollIntoView({block:'nearest'}); }
+    }
+
+    function playNext() {
+        if (files.length === 0) return;
+        selectFile((currentIdx + 1) % files.length);
+    }
+
+    function playPrev() {
+        if (files.length === 0) return;
+        selectFile((currentIdx - 1 + files.length) % files.length);
+    }
+
+    /* ── Preview ───────────────────────────────────────────── */
+    function previewFile(file) {
+        const box = document.getElementById('previewBox');
+        const url = '/uploads/' + encodeURIComponent(file.name);
+        if (file.type === 'video') {
+            box.innerHTML = `
+                <video controls autoplay>
+                    <source src="${url}" type="video/mp4">
+                    <source src="${url}" type="video/webm">
+                    Your browser does not support video.
+                </video>`;
+        } else {
+            box.innerHTML = `<img src="${url}" alt="${file.name}" />`;
+        }
+    }
+
+    /* ── Upload ────────────────────────────────────────────── */
     async function uploadFiles() {
         const input  = document.getElementById('fileInput');
         const status = document.getElementById('uploadStatus');
-
         if (input.files.length === 0) {
             status.className = 'error';
             status.textContent = 'Please select at least one file.';
             return;
         }
-
         const formData = new FormData();
-        for (const file of input.files) {
-            formData.append('file', file);
-        }
+        for (const file of input.files) formData.append('file', file);
 
         status.className = '';
         status.textContent = 'Uploading...';
-
         try {
-            const response = await fetch('/', {
-                method: 'POST',
-                body: formData   // browser sets Content-Type + boundary automatically
-            });
-
-            const result = await response.json();
-
+            const response = await fetch('/', { method: 'POST', body: formData });
+            const result   = await response.json();
             if (result.errors.length === 0) {
                 status.className = '';
                 status.textContent = 'Uploaded: ' + result.uploaded.join(', ');
@@ -73,12 +159,15 @@
                     (result.uploaded.length ? 'Saved: ' + result.uploaded.join(', ') + '. ' : '') +
                     'Errors: ' + result.errors.join(', ');
             }
+            await loadPlaylist(); // refresh after upload
         } catch (err) {
             status.className = 'error';
             status.textContent = 'Upload failed: ' + err.message;
         }
     }
-</script>
 
+    // Load on page start
+    loadPlaylist();
+</script>
 </body>
 </html>

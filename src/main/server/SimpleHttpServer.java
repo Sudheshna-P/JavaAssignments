@@ -28,7 +28,7 @@ public class SimpleHttpServer {
     private final LoggerManager logger;
     private final ExecutorService ioPool = Executors.newFixedThreadPool(8);
 
-    /** Normal state: accumulating request headers */
+    /** accumulates request headers */
     private static class ReadAcc {
         final ByteArrayOutputStream buf = new ByteArrayOutputStream();
     }
@@ -89,7 +89,7 @@ public class SimpleHttpServer {
 
         while (true) {
             int headerEnd = findHeaderEnd(data, processed);
-            if (headerEnd == -1) break; // headers incomplete ? wait for more
+            if (headerEnd == -1) break;
 
             int end = headerEnd + 4;
             String headers = new String(data, processed, end - processed, StandardCharsets.US_ASCII);
@@ -122,7 +122,7 @@ public class SimpleHttpServer {
             }
 
             if (!method.equals("GET")) {
-                sendAndMaybeClose(client, key, send405().getBytes(), keepAlive);
+                sendResponse(client, key, send405().getBytes(), keepAlive);
                 processed = end;
                 continue;
             }
@@ -153,7 +153,7 @@ public class SimpleHttpServer {
         String contentLength = extractHeader(headers, "Content-Length");
 
         if (contentLength == null) {
-            sendAndMaybeClose(client, key,
+            sendResponse(client, key,
                     sendError(411, "Length Required", "Content-Length missing").getBytes(), keepAlive);
             return headerEnd;
         }
@@ -161,17 +161,16 @@ public class SimpleHttpServer {
         long bodyLength = Long.parseLong(contentLength.trim());
 
         if (bodyLength > MAX_UPLOAD_SIZE) {
-            sendAndMaybeClose(client, key,
+            sendResponse(client, key,
                     sendError(413, "Payload Too Large",
                             "Max " + (MAX_UPLOAD_SIZE / 1024 / 1024) + " MB").getBytes(), keepAlive);
             return headerEnd;
         }
 
-        // ?? Multipart upload ? switch to streaming mode ???????????????????????
         if (contentType != null && contentType.toLowerCase().contains("multipart/form-data")) {
             String boundary = extractBoundary(contentType);
             if (boundary == null) {
-                sendAndMaybeClose(client, key,
+                sendResponse(client, key,
                         sendError(400, "Bad Request", "Missing boundary").getBytes(), keepAlive);
                 return headerEnd;
             }
@@ -198,10 +197,10 @@ public class SimpleHttpServer {
                 finishUpload(key, client, state);
             }
 
-            return -2; // special: attachment switched, caller should break
+            return -2;
         }
 
-        if (data.length < headerEnd + bodyLength) return 0; // wait for more
+        if (data.length < headerEnd + bodyLength) return 0;
 
         String body = new String(data, headerEnd, (int) bodyLength, StandardCharsets.UTF_8);
         logger.info("POST Body: " + body);
@@ -226,7 +225,7 @@ public class SimpleHttpServer {
         long remaining = state.totalBodyBytes - state.written;
         if (chunk.limit() > remaining) chunk.limit((int) remaining);
 
-        int writtenNow = chunk.remaining(); // ← capture BEFORE writing
+        int writtenNow = chunk.remaining();
         while (chunk.hasRemaining()) {
             state.out.write(chunk);
         }
@@ -239,7 +238,7 @@ public class SimpleHttpServer {
         }
     }
 
-    // ?? Parse temp file and respond ???????????????????????????????????????????
+    //Parse temp file and respond
 
     private void finishUpload(SelectionKey key, SocketChannel client,
                               UploadState state) throws IOException {
@@ -249,7 +248,6 @@ public class SimpleHttpServer {
 
         logger.info("Upload complete, parsing multipart...");
 
-        // Offload the parse + file-rename to thread pool (disk read)
         key.interestOps(0);
         ioPool.submit(() -> {
             try {
@@ -264,7 +262,6 @@ public class SimpleHttpServer {
                 logger.info("finishUpload error: " + e.getMessage());
                 try { client.close(); } catch (IOException ignored) {}
             } finally {
-                // Reset attachment to normal ReadAcc for keep-alive
                 key.attach(new ReadAcc());
                 if (key.isValid()) {
                     key.interestOps(SelectionKey.OP_READ);
@@ -310,11 +307,9 @@ public class SimpleHttpServer {
                 continue; // plain text field, skip
             }
 
-            // Sanitise
             filename = Paths.get(filename).getFileName().toString()
                     .replaceAll("[^a-zA-Z0-9._\\-]", "_");
 
-            // Deduplicate
             Path savePath = Paths.get(UPLOADS, filename);
             if (Files.exists(savePath)) {
                 String ts  = String.valueOf(System.currentTimeMillis());
@@ -341,8 +336,7 @@ public class SimpleHttpServer {
         }
     }
 
-    // ?? Upload response ???????????????????????????????????????????????????????
-
+    // Upload response
     private void sendUploadResponse(SocketChannel client, SelectionKey key,
                                     List<String> saved, List<String> errors,
                                     boolean keepAlive) {
@@ -407,11 +401,11 @@ public class SimpleHttpServer {
                     "Content-Length: " + body.getBytes(StandardCharsets.UTF_8).length + "\r\n" +
                     "Connection: " + (keepAlive ? "keep-alive" : "close") + "\r\n\r\n" +
                     body;
-            sendAndMaybeClose(client, key,
+            sendResponse(client, key,
                     response.getBytes(StandardCharsets.UTF_8), keepAlive);
         } catch (IOException e) {
             logger.info("Playlist error: " + e.getMessage());
-            sendAndMaybeClose(client, key, send404().getBytes(), keepAlive);
+            sendResponse(client, key, send404().getBytes(), keepAlive);
         }
     }
 
@@ -427,13 +421,13 @@ public class SimpleHttpServer {
 
         Path filePath = resolvePath(path);
         if (filePath == null) {
-            sendAndMaybeClose(client, key, send404().getBytes(), keepAlive); return end;
+            sendResponse(client, key, send404().getBytes(), keepAlive); return end;
         }
         if (!isSafePath(filePath)) {
             sendBytes(client, send403().getBytes()); cancelAndClose(key, client); return -1;
         }
         if (!Files.exists(filePath) || Files.isDirectory(filePath)) {
-            sendAndMaybeClose(client, key, send404().getBytes(), keepAlive); return end;
+            sendResponse(client, key, send404().getBytes(), keepAlive); return end;
         }
         if (handleCaching(client, key, headers, filePath, keepAlive)) return end;
 
@@ -467,7 +461,7 @@ public class SimpleHttpServer {
             if (parts.length > 1 && !parts[1].isEmpty()) endByte = Long.parseLong(parts[1].trim());
         } catch (Exception ignored) {}
         if (start > endByte || start >= fileSize) {
-            sendAndMaybeClose(client, key,
+            sendResponse(client, key,
                     ("HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */" + fileSize + "\r\nContent-Length: 0\r\n\r\n").getBytes(), keepAlive);
             return;
         }
@@ -513,14 +507,12 @@ public class SimpleHttpServer {
         if (!keepAlive) client.close();
     }
 
-    // ?? Path / safety ?????????????????????????????????????????????????????????
-
     private Path resolvePath(String path) {
         String folder = "Public", prefix = "";
-        if      (path.startsWith("/images/"))  { folder = "images";    prefix = "/images"; }
-        else if (path.startsWith("/files/"))   { folder = "documents"; prefix = "/files"; }
-        else if (path.startsWith("/video/"))   { folder = "video";     prefix = "/video"; }
-        else if (path.startsWith("/uploads/")) { folder = "uploads";   prefix = "/uploads"; }
+        if (path.startsWith("/images/")) { folder = "images"; prefix = "/images"; }
+        else if (path.startsWith("/files/")) { folder = "documents"; prefix = "/files"; }
+        else if (path.startsWith("/video/")) { folder = "video"; prefix = "/video"; }
+        else if (path.startsWith("/uploads/")) { folder = "uploads"; prefix = "/uploads"; }
         String rel = prefix.isEmpty() ? path : path.substring(prefix.length());
         if (rel.isEmpty() || rel.equals("/")) return null;
         String fileRel = rel.startsWith("/") ? rel.substring(1) : rel;
@@ -546,14 +538,14 @@ public class SimpleHttpServer {
                         "Date: " + HTTP_DATE.format(ZonedDateTime.now()) + "\r\n" +
                         "Last-Modified: " + HTTP_DATE.format(Files.getLastModifiedTime(filePath).toInstant()) + "\r\n" +
                         "Connection: " + (keepAlive ? "keep-alive" : "close") + "\r\n\r\n";
-                sendAndMaybeClose(client, key, r.getBytes(StandardCharsets.US_ASCII), keepAlive);
+                sendResponse(client, key, r.getBytes(StandardCharsets.US_ASCII), keepAlive);
                 return true;
             }
         } catch (Exception ignored) {}
         return false;
     }
 
-    // ?? Multipart helpers ?????????????????????????????????????????????????????
+    //Multipart helpers
 
     private static String extractBoundary(String contentType) {
         for (String p : contentType.split(";")) {
@@ -594,10 +586,7 @@ public class SimpleHttpServer {
         return null;
     }
 
-    // ?? Low-level send helpers ????????????????????????????????????????????????
-
-    private void sendAndMaybeClose(SocketChannel client, SelectionKey key,
-                                   byte[] data, boolean keepAlive) {
+    private void sendResponse(SocketChannel client, SelectionKey key, byte[] data, boolean keepAlive) {
         try {
             client.write(ByteBuffer.wrap(data));
             if (!keepAlive) cancelAndClose(key, client);
@@ -624,11 +613,9 @@ public class SimpleHttpServer {
                 "Content-Length: " + body.length() + "\r\n\r\n" + body;
     }
 
-    private static String send404() { return sendError(404, "Not Found",        "Resource not found"); }
+    private static String send404() { return sendError(404, "Not Found","Resource not found"); }
     private static String send405() { return sendError(405, "Method Not Allowed","Method not allowed"); }
-    private static String send403() { return sendError(403, "Forbidden",         "Access denied");      }
-
-    // ?? Misc ??????????????????????????????????????????????????????????????????
+    private static String send403() { return sendError(403, "Forbidden","Access denied");      }
 
     private static int findHeaderEnd(byte[] data, int start) {
         for (int i = start; i <= data.length - 4; i++)
